@@ -1,0 +1,247 @@
+// MADAT24 schema
+// Default: sqlite for dev (no install needed). Switch provider + DATABASE_URL
+// to "postgresql" for production. The schema is portable — same fields work on both.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users ────────────────────────────────────────────────────────
+// role: "CUSTOMER" | "MECHANIC" (string, not enum, so SQLite + Postgres both work)
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String
+  phone         String
+  passwordHash  String
+  role          String
+  fcmToken      String?
+  emailVerified Boolean  @default(false)
+  phoneVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  mechanicProfile MechanicProfile?
+  customerJobs    Job[]            @relation("CustomerJobs")
+  mechanicJobs    Job[]            @relation("MechanicJobs")
+  chatMessages    ChatMessage[]
+  notifications   Notification[]
+  reviewsGiven    Review[]         @relation("CustomerReviews")
+  reviewsReceived Review[]         @relation("MechanicReviews")
+
+  @@unique([email, role])
+  @@index([role])
+}
+
+// ─── Mechanic profile + live location ─────────────────────────────
+model MechanicProfile {
+  id                String  @id @default(uuid())
+  userId            String  @unique
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  shopName          String
+  description       String?
+  address           String?
+  city              String?
+  state             String?
+  pincode           String?
+  gstNumber         String?
+  whatsappNumber    String?
+  upiId             String?
+  hourlyRate        Float    @default(500)
+  yearsOfExperience Int      @default(0)
+
+  // services + vehicle types stored as comma-separated strings (SQLite-portable)
+  services          String   @default("")  // e.g. "tyre-puncture,fuel-delivery"
+  vehicleTypes      String   @default("car,bike")
+  profilePhoto      String?
+
+  // Live state
+  isOnline          Boolean  @default(false)
+  isVerified        Boolean  @default(false)
+  latitude          Float?
+  longitude         Float?
+  lastSeenAt        DateTime @default(now())
+
+  // Computed metrics
+  rating            Float    @default(0)
+  totalRatings      Int      @default(0)
+  jobsCompleted     Int      @default(0)
+  responseRate      Float    @default(100)
+  completionRate    Float    @default(100)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([isOnline, latitude, longitude])
+}
+
+// ─── Jobs ─────────────────────────────────────────────────────────
+// status: "pending" | "accepted" | "in-progress" | "completed" | "cancelled"
+model Job {
+  id            String   @id @default(uuid())
+  customerId    String
+  customer      User     @relation("CustomerJobs", fields: [customerId], references: [id], onDelete: Cascade)
+  mechanicId    String?
+  mechanic      User?    @relation("MechanicJobs", fields: [mechanicId], references: [id])
+
+  serviceType   String
+  vehicleType   String
+  vehicleMake   String?
+  vehicleModel  String?
+  vehicleYear   String?
+  licensePlate  String?
+
+  address       String
+  city          String
+  state         String?
+  pincode       String?
+  latitude      Float
+  longitude     Float
+
+  description   String?
+  status        String   @default("pending")
+  estimatedMin  Float?
+  estimatedMax  Float?
+  estimatedArrival String?
+
+  requestedAt   DateTime @default(now())
+  acceptedAt    DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  invoice       Invoice?
+  chatMessages  ChatMessage[]
+  media         Media[]
+  review        Review?
+
+  @@index([customerId])
+  @@index([mechanicId])
+  @@index([status])
+}
+
+// ─── Invoice (per job) ────────────────────────────────────────────
+model Invoice {
+  id             String   @id @default(uuid())
+  jobId          String   @unique
+  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  invoiceNumber  String   @unique
+
+  // Line items as JSON string (SQLite-portable; parse on read)
+  lineItems      String   @default("[]")
+
+  subtotal       Float
+  tax            Float
+  total          Float
+  paymentStatus  String   @default("pending") // "pending" | "paid"
+  paymentMethod  String?
+  paidAt         DateTime?
+
+  // ── One-time credit ─────────────────────────────────────────────
+  // isCredit=true means the customer chose the "pay later" credit option.
+  // paymentStatus stays "pending" until they actually settle. creditTakenAt
+  // records when they used credit; creditClearedAt records when they paid it.
+  isCredit         Boolean   @default(false)
+  creditTakenAt    DateTime?
+  creditClearedAt  DateTime?
+
+  // Razorpay refs (if applicable)
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ─── Chat messages ────────────────────────────────────────────────
+// senderRole: "customer" | "mechanic"
+model ChatMessage {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  senderId    String
+  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderRole  String
+  text        String
+  imageUrl    String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([jobId, createdAt])
+}
+
+// ─── Reviews ──────────────────────────────────────────────────────
+model Review {
+  id          String   @id @default(uuid())
+  jobId       String   @unique
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    User     @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+  mechanicId  String
+  mechanic    User     @relation("MechanicReviews", fields: [mechanicId], references: [id], onDelete: Cascade)
+
+  rating      Int
+  review      String   @default("")
+  tags        String   @default("") // comma-separated
+
+  mechanicResponse   String?
+  mechanicResponseAt DateTime?
+
+  createdAt   DateTime @default(now())
+
+  @@index([mechanicId])
+}
+
+// ─── Notifications ────────────────────────────────────────────────
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  data      String?  // JSON string for extra payload
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+// ─── Media (photos attached to jobs) ──────────────────────────────
+// category: "customer" | "progress" | "completion" | "chat"
+model Media {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  uploadedBy  String   // userId
+  category    String
+  url         String
+  mimeType    String   @default("image/jpeg")
+  uploadedAt  DateTime @default(now())
+
+  @@index([jobId, category])
+}
+
+// ─── OTPs (email + phone) ─────────────────────────────────────────
+model Otp {
+  id         String   @id @default(uuid())
+  identifier String   // email or phone
+  channel    String   // "email" | "phone"
+  code       String
+  expiresAt  DateTime
+  consumed   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([identifier, channel])
+}

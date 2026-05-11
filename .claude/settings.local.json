@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"D:\\\\tan\\\\PRODUCTION-APP\\\\madat24-backend\\\\src\" -Recurse -Directory | Select-Object FullName | ForEach-Object {$_.FullName -replace [regex]::Escape\\(\"D:\\\\tan\\\\PRODUCTION-APP\\\\madat24-backend\\\\src\"\\), \"src\"})",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\tan\\\\PRODUCTION-APP\\\\madat24-customer\\\\app\" -Recurse -File | Where-Object {$_.Extension -match '\\\\.\\(tsx|ts\\)$'} | Select-Object FullName | ForEach-Object {$_.FullName -replace [regex]::Escape\\(\"D:\\\\tan\\\\PRODUCTION-APP\\\\madat24-customer\"\\), \"\"} | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\tan\\\\PRODUCTION-APP\\\\madat24-mechanic\\\\app\" -Recurse -File | Where-Object {$_.Extension -match '\\\\.\\(tsx|ts\\)$'} | Select-Object FullName | ForEach-Object {$_.FullName -replace [regex]::Escape\\(\"D:\\\\tan\\\\PRODUCTION-APP\\\\madat24-mechanic\"\\), \"\"} | Sort-Object)",
+      "PowerShell(Get-ChildItem madat24-customer\\\\app -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize -Wrap; Write-Host \"---MECHANIC APP---\"; Get-ChildItem madat24-mechanic\\\\app -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize -Wrap)"
+    ]
+  }
+}

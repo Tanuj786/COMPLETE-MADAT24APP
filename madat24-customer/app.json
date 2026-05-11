@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Madat24",
+    "slug": "madat24-customer",
+    "scheme": "madat24customer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0A"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0A0A0A"
+      },
+      "package": "com.madat24.customer",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.madat24.customer",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Madat24 needs camera to take photos of your vehicle",
+        "NSPhotoLibraryUsageDescription": "Madat24 needs gallery access to upload vehicle photos",
+        "NSLocationWhenInUseUsageDescription": "Madat24 needs your location to find nearby mechanics",
+        "NSLocationAlwaysUsageDescription": "Madat24 needs your location to dispatch mechanics"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-location",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Madat24 needs access to your photos",
+          "cameraPermission": "Madat24 needs camera to take vehicle photos"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0A0A0A"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

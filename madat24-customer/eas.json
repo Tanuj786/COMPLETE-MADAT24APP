@@ -1,0 +1,29 @@
+{
+  "cli": { "version": ">= 12.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "API_URL": "http://192.168.1.14:4000/api"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "API_URL": "https://staging.madat24.com/api"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" },
+      "env": {
+        "API_URL": "https://api.madat24.com/api"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
