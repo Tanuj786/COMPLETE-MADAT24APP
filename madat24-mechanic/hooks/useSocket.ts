@@ -18,7 +18,7 @@ import { BASE_URL, getToken } from "~/lib/api";
 
 // Strip "/api" suffix to get the raw server URL
 // "http://192.168.1.25:4000/api"  →  "http://192.168.1.25:4000"
-const SOCKET_URL = BASE_URL.replace(/\/api\/?$/, "");
+const SOCKET_URL = "http://192.168.31.240:4000/api";
 
 let globalSocket: any   = null;
 let globalToken:  string | null = null;
