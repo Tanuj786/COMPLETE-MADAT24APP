@@ -4,6 +4,7 @@ import fs from "fs";
 import multer from "multer";
 import { prisma } from "../prisma";
 import { requireAuth } from "../auth";
+import { publishUpload } from "../uploads";
 
 const r = Router();
 
@@ -31,7 +32,8 @@ r.post("/:jobId", requireAuth, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "file is required" });
 
   const category = String(req.body?.category || "customer");
-  const url = `/uploads/media/${req.file.filename}`;
+  const localUrl = `/uploads/media/${req.file.filename}`;
+  const url = await publishUpload(req.file.path, localUrl, "media");
   const m = await prisma.media.create({
     data: {
       jobId: job.id,

@@ -17,7 +17,6 @@ import Icon from "~/lib/icons/Icon";
 import { FONTS } from "~/constants";
 import { useTheme } from "~/components/ui";
 import { useAuthStore } from "~/stores";
-import { apiSendOtp } from "~/lib/api";
 
 // ─── Saved-credentials helpers (re-login suggestion) ─────────────
 // We store email + phone + role + timestamp so the next login screen can
@@ -462,10 +461,6 @@ export function SignupScreen({ roleLabel, icon, colors, role, loginRoute, dashbo
   const [error,       setError]       = useState("");
   const [success,     setSuccess]     = useState(false);
   const [extras,      setExtras]      = useState<Record<string, string>>({});
-  const [phase,       setPhase]       = useState<"details" | "otp">("details");
-  const [emailOtp,    setEmailOtp]    = useState("");
-  const [devOtp,      setDevOtp]      = useState<string | null>(null);
-  const [resending,   setResending]   = useState(false);
   const { signup } = useAuthStore();
 
   const logoScale = useRef(new Animated.Value(0)).current;
@@ -515,8 +510,7 @@ export function SignupScreen({ roleLabel, icon, colors, role, loginRoute, dashbo
     ]).start();
   };
 
-  // Phase 1 — validate fields, send email OTP, switch to OTP phase
-  const handleSendOtp = async () => {
+  const handleCreateAccount = async () => {
     setError("");
     if (!name.trim() || !email.trim() || !phone.trim()) {
       setError("Please fill in all required fields."); shakeError(); return;
@@ -535,26 +529,8 @@ export function SignupScreen({ roleLabel, icon, colors, role, loginRoute, dashbo
     }
     setLoading(true);
     try {
-      const r = await apiSendOtp(email.trim().toLowerCase());
-      if (r.devOtp) setDevOtp(r.devOtp);  // dev mode — auto-show the code
-      setPhase("otp");
-      setEmailOtp("");
-    } catch (e: any) {
-      setError(e?.message || "Couldn't send OTP. Check your email and try again.");
-      shakeError();
-    } finally { setLoading(false); }
-  };
-
-  // Phase 2 — verify OTP + actually create the account
-  const handleVerifyAndCreate = async () => {
-    setError("");
-    if (!/^\d{6}$/.test(emailOtp)) {
-      setError("Enter the 6-digit code we sent to your email."); shakeError(); return;
-    }
-    setLoading(true);
-    try {
       const cleanEmail = email.trim().toLowerCase();
-      await signup({ name: name.trim(), email: cleanEmail, phone: phone.trim(), password, emailOtp }, role);
+      await signup({ name: name.trim(), email: cleanEmail, phone: phone.trim(), password }, role);
       saveLastUser({ email: cleanEmail, phone: phone.trim(), name: name.trim(), role, savedAt: Date.now() });
       setSuccess(true);
       setTimeout(() => router.replace(dashboardRoute as any), 800);
@@ -562,18 +538,6 @@ export function SignupScreen({ roleLabel, icon, colors, role, loginRoute, dashbo
       setError(e?.message || "Signup failed. Please try again.");
       shakeError();
     } finally { setLoading(false); }
-  };
-
-  const handleResendOtp = async () => {
-    setError("");
-    setResending(true);
-    try {
-      const r = await apiSendOtp(email.trim().toLowerCase());
-      if (r.devOtp) setDevOtp(r.devOtp);
-    } catch (e: any) {
-      setError(e?.message || "Couldn't resend OTP.");
-      shakeError();
-    } finally { setResending(false); }
   };
 
   const fieldDelay = (i: number) => 200 + i * 90;
@@ -639,7 +603,6 @@ export function SignupScreen({ roleLabel, icon, colors, role, loginRoute, dashbo
             )}
 
             {/* Fields — only shown in details phase */}
-            {phase === "details" && (
               <View style={{ gap: 2, marginBottom: 24 }}>
                 <AnimField label="Full Name"     value={name}     onChangeText={v => { setName(v);    setError(""); }} placeholder="Your full name"        iconName="User"  required delay={fieldDelay(0)} colors={colors} />
                 <AnimField label="Email Address" value={email}    onChangeText={v => { setEmail(v);   setError(""); }} placeholder="your@email.com"         iconName="Mail"  required keyboard="email-address" delay={fieldDelay(1)} colors={colors} />
@@ -652,89 +615,24 @@ export function SignupScreen({ roleLabel, icon, colors, role, loginRoute, dashbo
                 <AnimField label="Password"         value={password}    onChangeText={v => { setPassword(v);    setError(""); }} placeholder="Min 6 characters" iconName="Lock" required secure delay={fieldDelay(3 + extraFields.length)}     colors={colors} />
                 <AnimField label="Confirm Password" value={confirmPass} onChangeText={v => { setConfirmPass(v); setError(""); }} placeholder="Re-enter password"  iconName="Lock" secure delay={fieldDelay(4 + extraFields.length)} colors={colors} />
               </View>
-            )}
-
-            {/* OTP step — verify email before account creation */}
-            {phase === "otp" && (
-              <View style={{ marginBottom: 24 }}>
-                <View style={{ alignItems: "center", marginBottom: 16 }}>
-                  <View style={{ width: 64, height: 64, borderRadius: 18, backgroundColor: colors[0] + "18", borderWidth: 1.5, borderColor: colors[0] + "50", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                    <Text style={{ fontSize: 30 }}>📧</Text>
-                  </View>
-                  <Text style={{ color: C.text1, fontFamily: FONTS.black, fontSize: 18 }}>Verify Your Email</Text>
-                  <Text style={{ color: C.text2, fontFamily: FONTS.regular, fontSize: 13, marginTop: 4, textAlign: "center" }}>
-                    We sent a 6-digit code to{"\n"}
-                    <Text style={{ color: C.text1, fontFamily: FONTS.semibold }}>{email.trim().toLowerCase()}</Text>
-                  </Text>
-                </View>
-
-                <Text style={{ color: C.text2, fontFamily: FONTS.medium, fontSize: 13, marginBottom: 7 }}>
-                  Verification Code <Text style={{ color: colors[0] }}>*</Text>
-                </Text>
-                <View style={{
-                  flexDirection: "row", alignItems: "center",
-                  backgroundColor: C.bg1, borderRadius: 14,
-                  borderWidth: 1.5, borderColor: emailOtp.length === 6 ? colors[0] : C.border,
-                  paddingHorizontal: 14,
-                }}>
-                  <Icon name="ShieldCheck" size={18} color={emailOtp.length === 6 ? colors[0] : C.text3} />
-                  <TextInput
-                    value={emailOtp}
-                    onChangeText={(v) => { setEmailOtp(v.replace(/\D/g, "").slice(0, 6)); setError(""); }}
-                    placeholder="000000"
-                    placeholderTextColor={C.text3}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    autoFocus
-                    style={{ flex: 1, color: C.text1, fontFamily: FONTS.black, fontSize: 22, letterSpacing: 8, paddingVertical: 16, paddingHorizontal: 12, textAlign: "center" }}
-                  />
-                </View>
-
-                {/* Dev-mode hint: show the actual OTP since SMTP isn't configured */}
-                {devOtp && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, backgroundColor: "#F59E0B12", borderWidth: 1, borderColor: "#F59E0B40", marginTop: 10 }}>
-                    <Text style={{ fontSize: 13 }}>🔧</Text>
-                    <Text style={{ flex: 1, color: "#F59E0B", fontFamily: FONTS.medium, fontSize: 11.5 }}>
-                      Dev mode — your code: <Text style={{ fontFamily: FONTS.black }}>{devOtp}</Text>
-                    </Text>
-                  </View>
-                )}
-
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 14 }}>
-                  <Pressable onPress={() => { setPhase("details"); setEmailOtp(""); setDevOtp(null); setError(""); }}>
-                    <Text style={{ color: C.text2, fontFamily: FONTS.regular, fontSize: 13 }}>← Edit details</Text>
-                  </Pressable>
-                  <Pressable onPress={handleResendOtp} disabled={resending}>
-                    <Text style={{ color: colors[0], fontFamily: FONTS.semibold, fontSize: 13 }}>
-                      {resending ? "Sending…" : "Resend code"}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
 
             {/* Submit — adapts to current phase */}
             <Animated.View style={{ opacity: btnOp, transform: [{ scale: btnScale }] }}>
               <Pressable
-                onPress={phase === "details" ? handleSendOtp : handleVerifyAndCreate}
-                disabled={loading || (phase === "otp" && emailOtp.length !== 6)}
+                onPress={handleCreateAccount}
+                disabled={loading}
                 style={({ pressed }) => ({ opacity: pressed || loading ? 0.85 : 1, borderRadius: 18, overflow: "hidden" })}
               >
                 <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                   style={{ paddingVertical: 19, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 10 }}>
                   {loading ? (
                     <Text style={{ color: "white", fontFamily: FONTS.bold, fontSize: 16 }}>
-                      {phase === "details" ? "Sending OTP..." : "Creating Account..."}
+                      Creating Account...
                     </Text>
-                  ) : phase === "details" ? (
-                    <>
-                      <Icon name="Mail" size={20} color="white" />
-                      <Text style={{ color: "white", fontFamily: FONTS.bold, fontSize: 16 }}>Continue · Verify Email</Text>
-                    </>
                   ) : (
                     <>
                       <Icon name="UserPlus" size={20} color="white" />
-                      <Text style={{ color: "white", fontFamily: FONTS.bold, fontSize: 16 }}>Verify & Create Account</Text>
+                      <Text style={{ color: "white", fontFamily: FONTS.bold, fontSize: 16 }}>Create Account</Text>
                     </>
                   )}
                 </LinearGradient>
@@ -748,7 +646,7 @@ export function SignupScreen({ roleLabel, icon, colors, role, loginRoute, dashbo
               </Text>
 
               {/* AI Helper teaser — try before signup */}
-              {role === "customer" && phase === "details" && (
+              {role === "customer" && (
                 <Pressable
                   onPress={() => router.push("/(shared)/ai-assistant" as any)}
                   style={({ pressed }) => ({

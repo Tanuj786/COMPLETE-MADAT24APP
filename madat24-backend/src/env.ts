@@ -31,6 +31,11 @@ const Schema = z.object({
 
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
+  ENABLE_DEMO_PAYMENTS: z.coerce.boolean().default(false),
+
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
 
   SENTRY_DSN: z.string().optional(),
 
@@ -76,6 +81,12 @@ if (env.NODE_ENV === "production") {
   if (!env.CORS_ORIGIN || env.CORS_ORIGIN === "*") {
     errs.push("CORS_ORIGIN must be a comma-separated allowlist in production (e.g. https://app.madat24.com,https://admin.madat24.com).");
   }
+  if (!(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) && !env.ENABLE_DEMO_PAYMENTS) {
+    errs.push("RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production unless ENABLE_DEMO_PAYMENTS=true for APK testing.");
+  }
+  if (!(env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET)) {
+    errs.push("CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are required in production so uploaded photos survive deploys.");
+  }
 
   if (errs.length) {
     console.error("\n❌ Production safety checks failed:\n");
@@ -90,4 +101,5 @@ export const isEmailConfigured  = !!(env.SMTP_HOST && env.SMTP_USER && env.SMTP_
 export const isSmsConfigured    = !!(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE);
 export const isRzpConfigured    = !!(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET);
 export const isAiConfigured     = !!env.ANTHROPIC_API_KEY;
+export const isCloudinaryConfigured = !!(env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET);
 export const isProduction       = env.NODE_ENV === "production";

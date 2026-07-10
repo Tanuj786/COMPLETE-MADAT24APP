@@ -9,7 +9,7 @@ const r = Router();
 // POST /api/auth/signup
 r.post("/signup", authLimiter, validate(SignupSchema), async (req, res) => {
   try {
-    const { name, email, phone, password, role, emailOtp } = req.body;
+    const { name, email, phone, password, role } = req.body;
     const normEmail = email; // already normalized by zod
 
     const existing = await prisma.user.findFirst({
@@ -19,19 +19,6 @@ r.post("/signup", authLimiter, validate(SignupSchema), async (req, res) => {
       return res.status(409).json({ error: `An account already exists for ${normEmail} as ${role.toLowerCase()}.` });
     }
 
-    // ── Verify the email OTP issued by /api/email/send-otp ──────────
-    const otpRow = await prisma.otp.findFirst({
-      where: { identifier: normEmail, channel: "email", code: emailOtp, consumed: false },
-      orderBy: { createdAt: "desc" },
-    });
-    if (!otpRow) {
-      return res.status(400).json({ error: "Incorrect email OTP. Request a new code and try again." });
-    }
-    if (otpRow.expiresAt.getTime() < Date.now()) {
-      return res.status(400).json({ error: "Email OTP has expired. Request a new code." });
-    }
-    await prisma.otp.update({ where: { id: otpRow.id }, data: { consumed: true } });
-
     const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({
       data: {
@@ -40,8 +27,8 @@ r.post("/signup", authLimiter, validate(SignupSchema), async (req, res) => {
         phone: String(phone).trim(),
         passwordHash,
         role,
-        // OTP just verified — mark email as confirmed at creation time
-        ...({ emailVerified: true } as any),
+        emailVerified: false,
+        phoneVerified: false,
       },
     });
     // Auto-create empty mechanic profile so /mechanic/profile works immediately
@@ -53,7 +40,7 @@ r.post("/signup", authLimiter, validate(SignupSchema), async (req, res) => {
     const token = signToken({ id: user.id, email: user.email, role: role as "CUSTOMER" | "MECHANIC" });
     return res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, emailVerified: true },
+      user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, emailVerified: false },
     });
   } catch (e: any) {
     console.error("[auth/signup]", e);

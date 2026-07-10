@@ -5,6 +5,7 @@ import multer from "multer";
 import { prisma } from "../prisma";
 import { requireAuth } from "../auth";
 import { emitToJob } from "../socket";
+import { publishUpload } from "../uploads";
 
 const r = Router();
 
@@ -76,7 +77,8 @@ r.post("/:jobId/image", requireAuth, upload.single("image"), async (req, res) =>
   if (!job) return res.status(404).json({ error: "Job not found / not yours" });
   if (!req.file) return res.status(400).json({ error: "image file required" });
 
-  const url = `/uploads/chat/${req.file.filename}`;
+  const localUrl = `/uploads/chat/${req.file.filename}`;
+  const url = await publishUpload(req.file.path, localUrl, "chat");
   const senderRole = job.customerId === req.user!.id ? "customer" : "mechanic";
   const me = await prisma.user.findUnique({ where: { id: req.user!.id } });
   const msg = await prisma.chatMessage.create({

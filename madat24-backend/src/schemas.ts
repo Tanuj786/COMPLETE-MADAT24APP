@@ -8,7 +8,6 @@ export const SignupSchema = z.object({
   phone: z.string().min(7).max(20).trim(),
   password: z.string().min(6).max(100),
   role,
-  emailOtp: z.string().regex(/^\d{6}$/, "Email OTP must be 6 digits"),
 });
 
 export const LoginSchema = z.object({

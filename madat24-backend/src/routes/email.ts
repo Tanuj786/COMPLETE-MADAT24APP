@@ -5,7 +5,7 @@ import { prisma } from "../prisma";
 import { hashPassword } from "../auth";
 import { otpLimiter, validate } from "../middleware";
 import { SendEmailOtpSchema, VerifyEmailOtpSchema, ResetPasswordSchema } from "../schemas";
-import { env, isEmailConfigured } from "../env";
+import { env, isEmailConfigured, isProduction } from "../env";
 import { log } from "../logger";
 
 const r = Router();
@@ -62,8 +62,14 @@ r.post("/send-otp", otpLimiter, validate(SendEmailOtpSchema), async (req, res) =
         await sendOtpMail(email, code);
         return res.json({ message: "OTP sent to email." });
       } catch (e: any) {
-        log.warn("smtp failed, returning devOtp", { error: e.message });
+        log.warn("smtp failed", { error: e.message });
+        if (isProduction) {
+          return res.status(502).json({ error: "Failed to deliver OTP email. Please try again." });
+        }
       }
+    }
+    if (isProduction) {
+      return res.status(503).json({ error: "Email OTP delivery is not configured." });
     }
     log.info("dev OTP issued", { email, code });
     return res.json({ message: "OTP generated (dev mode — no SMTP configured).", devOtp: code });

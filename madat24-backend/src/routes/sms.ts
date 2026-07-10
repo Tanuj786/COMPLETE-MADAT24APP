@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../prisma";
 import { otpLimiter, validate } from "../middleware";
 import { SendPhoneOtpSchema, VerifyPhoneOtpSchema } from "../schemas";
-import { env, isSmsConfigured } from "../env";
+import { env, isProduction, isSmsConfigured } from "../env";
 import { log } from "../logger";
 
 const r = Router();
@@ -52,10 +52,16 @@ r.post("/send-otp", otpLimiter, validate(SendPhoneOtpSchema), async (req, res) =
       await sendSms(phone, `Your Madat24 verification code is ${code}. Valid for 10 minutes.`);
       return res.json({ message: "OTP sent via SMS.", phone });
     } catch (e: any) {
-      log.warn("twilio failed, returning devOtp", { error: e.message });
+      log.warn("twilio failed", { error: e.message });
+      if (isProduction) {
+        return res.status(502).json({ error: "Failed to deliver SMS OTP. Please try again." });
+      }
     }
   }
 
+  if (isProduction) {
+    return res.status(503).json({ error: "SMS OTP delivery is not configured." });
+  }
   log.info("dev SMS OTP issued", { phone, code });
   return res.json({ message: "OTP generated (dev mode — no Twilio configured).", devOtp: code, phone });
 });

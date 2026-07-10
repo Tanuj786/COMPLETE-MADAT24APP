@@ -3,13 +3,14 @@ import crypto from "crypto";
 import { prisma } from "../prisma";
 import { requireAuth } from "../auth";
 import { emitToUser } from "../socket";
-import { env, isRzpConfigured } from "../env";
+import { env, isProduction, isRzpConfigured } from "../env";
 import { sendPushToUser } from "../push";
 
 const r = Router();
 
 const RZP_KEY = env.RAZORPAY_KEY_ID;
 const RZP_SECRET = env.RAZORPAY_KEY_SECRET;
+const demoPaymentsEnabled = env.ENABLE_DEMO_PAYMENTS || !isProduction;
 
 // ─── GET /api/payments/invoice/:jobId ───────────────────────────────
 r.get("/invoice/:jobId", requireAuth, async (req, res) => {
@@ -62,6 +63,9 @@ r.post("/create-order", requireAuth, async (req, res) => {
   if (job.invoice.paymentStatus === "paid") return res.status(400).json({ error: "Already paid" });
 
   if (!isRzpConfigured) {
+    if (!demoPaymentsEnabled) {
+      return res.status(503).json({ error: "Razorpay is not configured. Set ENABLE_DEMO_PAYMENTS=true only for APK/demo testing." });
+    }
     const fakeOrder = `order_dev_${Date.now()}`;
     await prisma.invoice.update({
       where: { id: job.invoice.id },
@@ -99,6 +103,10 @@ r.post("/verify", requireAuth, async (req, res) => {
   const job = await prisma.job.findUnique({ where: { id: jobId }, include: { invoice: true } });
   if (!job?.invoice) return res.status(404).json({ error: "Invoice not found" });
   if (job.customerId !== req.user!.id) return res.status(403).json({ error: "Not your invoice" });
+
+  if (!isRzpConfigured && !demoPaymentsEnabled) {
+    return res.status(503).json({ error: "Razorpay is not configured. Set ENABLE_DEMO_PAYMENTS=true only for APK/demo testing." });
+  }
 
   if (isRzpConfigured) {
     const expected = crypto
@@ -169,6 +177,9 @@ r.post("/invoice/:jobId/tap-to-pay", requireAuth, async (req, res) => {
   if (job.invoice.paymentStatus === "paid") return res.status(400).json({ error: "Already paid" });
 
   const method = String(req.body?.method || "UPI");
+  if (!isRzpConfigured && !demoPaymentsEnabled) {
+    return res.status(503).json({ error: "Razorpay is not configured. Set ENABLE_DEMO_PAYMENTS=true only for APK/demo testing." });
+  }
   const wasCredit = (job.invoice as any).isCredit === true;
   const updated = await prisma.invoice.update({
     where: { id: job.invoice.id },

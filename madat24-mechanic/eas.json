@@ -5,14 +5,14 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "API_URL": "http://192.168.1.14:4000/api"
+        "API_URL": "http://192.168.29.121:4000/api"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": {
-        "API_URL": "https://staging.madat24.com/api"
+        "API_URL": "https://staging-api.madat24.com/api"
       }
     },
     "production": {

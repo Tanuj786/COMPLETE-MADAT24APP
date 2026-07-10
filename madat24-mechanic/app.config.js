@@ -1,20 +1,18 @@
 // Dynamic Expo config — see madat24-customer/app.config.js for explanation.
 
-const base = require("./app.json");
+const fallback = "http://192.168.29.121:4000/api";
 
-const fallback = "http://192.168.1.14:4000/api";
-const API_URL = process.env.API_URL || base.expo.extra?.API_URL || fallback;
-const SENTRY_DSN = process.env.SENTRY_DSN || base.expo.extra?.SENTRY_DSN || "";
+module.exports = ({ config }) => {
+  const API_URL = process.env.API_URL || config.extra?.API_URL || fallback;
+  const SENTRY_DSN = process.env.SENTRY_DSN || config.extra?.SENTRY_DSN || "";
 
-module.exports = {
-  ...base,
-  expo: {
-    ...base.expo,
+  return {
+    ...config,
     extra: {
-      ...(base.expo.extra || {}),
+      ...(config.extra || {}),
       API_URL,
       SENTRY_DSN,
-      eas: base.expo.extra?.eas,
+      eas: config.extra?.eas,
     },
-  },
+  };
 };

@@ -12,7 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
 const extra = (Constants.expoConfig?.extra ?? Constants.manifest?.extra) as { API_URL?: string } | undefined;
-export const BASE_URL: string = extra?.API_URL || "http://192.168.1.14:4000/api";
+export const BASE_URL: string = extra?.API_URL || "http://192.168.29.121:4000/api";
 
 // ─── Token helpers ────────────────────────────────────────────────
 export const saveToken  = (t: string) => AsyncStorage.setItem("madat24_token", t);
@@ -22,18 +22,24 @@ export const getToken   = ()          => AsyncStorage.getItem("madat24_token");
 // ─── Backend availability (non-blocking, cached) ──────────────────
 let _backendOk   = false;
 let _checkedAt   = 0;
+let _backendCheck: Promise<boolean> | null = null;
 
-/** Fire-and-forget backend check. Never blocks auth. */
-function checkBackend() {
+/** Check backend health, caching briefly so auth does not fail on stale startup state. */
+function checkBackend(): Promise<boolean> {
   const now = Date.now();
-  if (now - _checkedAt < 20000) return; // recheck every 20s
+  if (now - _checkedAt < 20000 && _backendOk) return Promise.resolve(true);
+  if (_backendCheck) return _backendCheck;
   _checkedAt = now;
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 2000);
-  fetch(BASE_URL.replace("/api", "") + "/health", { signal: controller.signal })
-    .then(r => { _backendOk = r.ok; })
-    .catch(() => { _backendOk = false; })
-    .finally(() => clearTimeout(t));
+  _backendCheck = fetch(BASE_URL.replace("/api", "") + "/health", { signal: controller.signal })
+    .then(r => (_backendOk = r.ok))
+    .catch(() => (_backendOk = false))
+    .finally(() => {
+      clearTimeout(t);
+      _backendCheck = null;
+    });
+  return _backendCheck;
 }
 
 // ─── Raw HTTP call (only used when _backendOk is true) ───────────
@@ -84,13 +90,8 @@ export interface ApiUser {
 export async function apiSignup(data: {
   name: string; email: string; phone: string;
   password: string; role: "CUSTOMER" | "MECHANIC";
-  emailOtp: string;
 }): Promise<{ token: string; user: ApiUser }> {
-  checkBackend();
-  // Wait briefly for the health probe to settle on cold start
-  if (!_backendOk) await new Promise(r => setTimeout(r, 800));
-
-  if (!_backendOk) throw new Error(NO_BACKEND_MSG);
+  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
 
   const r = await callBackend<{ token: string; user: ApiUser }>(
     "/auth/signup",
@@ -107,10 +108,7 @@ export async function apiSignup(data: {
 export async function apiLogin(data: {
   email: string; password: string; role: "CUSTOMER" | "MECHANIC";
 }): Promise<{ token: string; user: ApiUser }> {
-  checkBackend();
-  if (!_backendOk) await new Promise(r => setTimeout(r, 800));
-
-  if (!_backendOk) throw new Error(NO_BACKEND_MSG);
+  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
 
   const r = await callBackend<{ token: string; user: ApiUser }>(
     "/auth/login",
@@ -129,9 +127,7 @@ export const apiSaveFcmToken = (t: string) =>
 // EMAIL OTP  (Forgot Password)
 // ═══════════════════════════════════════════════════════════
 export async function apiSendOtp(email: string): Promise<{ message: string; devOtp?: string }> {
-  checkBackend();
-  if (!_backendOk) await new Promise(r => setTimeout(r, 800));
-  if (!_backendOk) throw new Error(NO_BACKEND_MSG);
+  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
   return await callBackend<{ message: string; devOtp?: string }>(
     "/email/send-otp",
     { method: "POST", body: JSON.stringify({ email: email.toLowerCase().trim() }) },
@@ -142,9 +138,7 @@ export async function apiSendOtp(email: string): Promise<{ message: string; devO
 export async function apiVerifyOtp(
   email: string, otp: string,
 ): Promise<{ message: string; resetToken: string; email: string }> {
-  checkBackend();
-  if (!_backendOk) await new Promise(r => setTimeout(r, 800));
-  if (!_backendOk) throw new Error(NO_BACKEND_MSG);
+  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
   return await callBackend<{ message: string; resetToken: string; email: string }>(
     "/email/verify-otp",
     { method: "POST", body: JSON.stringify({ email: email.toLowerCase().trim(), otp }) },
@@ -155,9 +149,7 @@ export async function apiVerifyOtp(
 export async function apiResetPassword(
   email: string, resetToken: string, newPassword: string,
 ): Promise<{ message: string }> {
-  checkBackend();
-  if (!_backendOk) await new Promise(r => setTimeout(r, 800));
-  if (!_backendOk) throw new Error(NO_BACKEND_MSG);
+  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
   return await callBackend<{ message: string }>(
     "/email/reset-password",
     { method: "POST", body: JSON.stringify({ email: email.toLowerCase().trim(), resetToken, newPassword }) },
@@ -176,9 +168,7 @@ function formatPhone(phone: string): string {
 export async function apiSendPhoneOtp(
   phone: string,
 ): Promise<{ message: string; devOtp?: string; phone?: string }> {
-  checkBackend();
-  if (!_backendOk) await new Promise(r => setTimeout(r, 800));
-  if (!_backendOk) throw new Error(NO_BACKEND_MSG);
+  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
   return await callBackend<{ message: string; devOtp?: string; phone?: string }>(
     "/sms/send-otp", { method: "POST", body: JSON.stringify({ phone: formatPhone(phone) }) }, false,
   );
@@ -187,9 +177,7 @@ export async function apiSendPhoneOtp(
 export async function apiVerifyPhoneOtp(
   phone: string, otp: string,
 ): Promise<{ message: string; verified: boolean }> {
-  checkBackend();
-  if (!_backendOk) await new Promise(r => setTimeout(r, 800));
-  if (!_backendOk) throw new Error(NO_BACKEND_MSG);
+  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
   return await callBackend<{ message: string; verified: boolean }>(
     "/sms/verify-otp", { method: "POST", body: JSON.stringify({ phone: formatPhone(phone), otp }) }, false,
   );

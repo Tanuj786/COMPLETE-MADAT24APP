@@ -11,13 +11,12 @@ import Icon from "~/lib/icons/Icon";
 import { FONTS, SERVICES } from "~/constants";
 import { useTheme } from "~/components/ui";
 import { useAuthStore, useMechanicStore } from "~/stores";
-import { apiSendPhoneOtp, apiVerifyPhoneOtp, apiSendOtp } from "~/lib/api";
 
 const { width } = Dimensions.get("window");
 
 const STEPS = [
   { id: 1, title: "Personal",  icon: "User"      },
-  { id: 2, title: "Verify",    icon: "Phone"     },
+  { id: 2, title: "Contact",   icon: "Phone"     },
   { id: 3, title: "Shop",      icon: "Store"     },
   { id: 4, title: "Services",  icon: "Wrench"    },
   { id: 5, title: "Documents", icon: "FileCheck" },
@@ -95,10 +94,6 @@ export default function MechanicSignup() {
   const [password, setPassword] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [otp, setOtp] = useState(["","","","","",""]);
-  const otpRefs = useRef<any[]>([]);
-  const [otpSent, setOtpSent] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
   const [shopName, setShopName] = useState("");
   const [shopDesc, setShopDesc] = useState("");
   const [address, setAddress] = useState("");
@@ -125,9 +120,6 @@ export default function MechanicSignup() {
   const { signup } = useAuthStore();
   const { setShopProfile } = useMechanicStore();
 
-  // Email OTP — required by backend for signup
-  const [emailOtpInput, setEmailOtpInput] = useState("");
-  const [emailOtpDevHint, setEmailOtpDevHint] = useState<string | null>(null);
 
   const animateNext = () => {
     Animated.sequence([
@@ -174,61 +166,11 @@ export default function MechanicSignup() {
     );
   };
 
-  const handleSendOtp = async () => {
-    const cleaned = phone.replace(/\D/g, "");
-    if (cleaned.length < 10) { Alert.alert("Required", "Enter a valid 10-digit phone number first"); return; }
-    if (!email.trim() || !email.includes("@")) { Alert.alert("Required", "Enter a valid email first (we send a verification code there too)"); return; }
-    setLoading(true);
-    try {
-      const [phoneResult, emailResult] = await Promise.all([
-        apiSendPhoneOtp(phone),
-        apiSendOtp(email.trim().toLowerCase()),
-      ]);
-      setOtpSent(true);
-      setResendTimer(30);
-      const iv = setInterval(() => setResendTimer(t => { if (t <= 1) { clearInterval(iv); return 0; } return t - 1; }), 1000);
-      if (emailResult.devOtp) setEmailOtpDevHint(emailResult.devOtp);
-      const phoneLine = phoneResult.devOtp
-        ? `Phone OTP (Dev): ${phoneResult.devOtp}`
-        : `Phone OTP sent to +91 ${cleaned.slice(-10)}`;
-      const emailLine = emailResult.devOtp
-        ? `Email OTP (Dev): ${emailResult.devOtp}`
-        : `Email OTP sent to ${email.trim().toLowerCase()}`;
-      Alert.alert("Codes Sent! 📨", `${phoneLine}\n${emailLine}`);
-    } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to send OTPs");
-    } finally { setLoading(false); }
-  };
-
-  const handleVerifyPhoneOtp = async (): Promise<boolean> => {
-    const code = otp.join("");
-    if (code.length < 6) { Alert.alert("Enter OTP", "Please enter all 6 digits"); return false; }
-    setLoading(true);
-    try {
-      await apiVerifyPhoneOtp(phone, code);
-      setLoading(false);
-      return true;
-    } catch (err: any) {
-      Alert.alert("Wrong OTP", err.message || "Incorrect code. Try again.");
-      setLoading(false);
-      return false;
-    }
-  };
-
-  const handleOtpChange = (val: string, idx: number) => {
-    const n = [...otp]; n[idx] = val; setOtp(n);
-    if (val && idx < 5) otpRefs.current[idx + 1]?.focus();
-    if (!val && idx > 0) otpRefs.current[idx - 1]?.focus();
-  };
 
   const handleFinalSubmit = async () => {
-    if (!/^\d{6}$/.test(emailOtpInput)) {
-      Alert.alert("Email OTP required", "Go back to the Verify step and enter the 6-digit code we sent to your email.");
-      return;
-    }
     setLoading(true);
     try {
-      await signup({ name, email, phone, password, emailOtp: emailOtpInput }, "mechanic");
+      await signup({ name, email, phone, password }, "mechanic");
       // Create a real shop profile from what the mechanic entered (no mock data)
       setShopProfile({
         id: `shop-${Date.now()}`,
@@ -270,8 +212,6 @@ export default function MechanicSignup() {
       if (password !== confirmPass) { Alert.alert("Error", "Passwords do not match"); return; }
       goNext();
     } else if (step === 2) {
-      if (!otpSent) { Alert.alert("Send OTP", "Please tap Send OTP first"); return; }
-      if (otp.filter(d => d !== "").length < 6) { Alert.alert("Enter OTP", "Please enter all 6 digits"); return; }
       goNext();
     } else if (step === 3) {
       if (!shopName.trim()) { Alert.alert("Required", "Please enter your shop name"); return; }
@@ -381,75 +321,21 @@ export default function MechanicSignup() {
               </View>
             )}
 
-            {/* STEP 2: OTP */}
+            {/* STEP 2: Contact */}
             {step === 2 && (
               <View>
-                <Text style={{ color: C.text1, fontFamily: FONTS.black, fontSize: 26, marginBottom: 6 }}>Verify Your{"\n"}Phone Number</Text>
-                <Text style={{ color: C.text2, fontFamily: FONTS.regular, fontSize: 14, marginBottom: 28 }}>OTP will be sent to{"\n"}<Text style={{ color: C.text1, fontFamily: FONTS.semibold }}>+91 {phone}</Text></Text>
-                {!otpSent ? (
-                  <View style={{ backgroundColor: C.card, borderRadius: 20, padding: 28, alignItems: "center", borderWidth: 1, borderColor: C.cardBorder }}>
-                    <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "#3B82F620", alignItems: "center", justifyContent: "center", marginBottom: 18 }}>
-                      <Icon name="MessageSquare" size={38} color="#3B82F6" />
-                    </View>
-                    <Text style={{ color: C.text1, fontFamily: FONTS.bold, fontSize: 18, textAlign: "center", marginBottom: 8 }}>Verify your number</Text>
-                    <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 13, textAlign: "center", marginBottom: 22 }}>We send a one-time code to your phone</Text>
-                    <Pressable onPress={handleSendOtp} style={{ width: "100%", borderRadius: 14, overflow: "hidden" }}>
-                      <LinearGradient colors={["#3B82F6","#1D4ED8"]} style={{ paddingVertical: 16, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
-                        <Icon name="Send" size={18} color="white" />
-                        <Text style={{ color: "white", fontFamily: FONTS.bold, fontSize: 15 }}>Send OTP to +91 {phone}</Text>
-                      </LinearGradient>
-                    </Pressable>
+                <Text style={{ color: C.text1, fontFamily: FONTS.black, fontSize: 26, marginBottom: 6 }}>Confirm Your{"\n"}Contact Details</Text>
+                <Text style={{ color: C.text2, fontFamily: FONTS.regular, fontSize: 14, marginBottom: 22 }}>OTP verification is disabled for this MVP build. You can continue with email, mobile, and password.</Text>
+                <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: C.cardBorder, gap: 14 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <Icon name="Mail" size={20} color="#3B82F6" />
+                    <Text style={{ color: C.text1, fontFamily: FONTS.medium, fontSize: 14, flex: 1 }}>{email.trim().toLowerCase()}</Text>
                   </View>
-                ) : (
-                  <View>
-                    {/* Email OTP — required by backend, must match the code we just emailed */}
-                    <Text style={{ color: C.text2, fontFamily: FONTS.medium, fontSize: 13, marginBottom: 8 }}>📧 Email Code (sent to {email.trim().toLowerCase()})</Text>
-                    <View style={{
-                      flexDirection: "row", alignItems: "center",
-                      backgroundColor: C.bg1, borderRadius: 14,
-                      borderWidth: 2, borderColor: emailOtpInput.length === 6 ? "#F97316" : C.border,
-                      paddingHorizontal: 14, marginBottom: 14,
-                    }}>
-                      <Icon name="ShieldCheck" size={18} color={emailOtpInput.length === 6 ? "#F97316" : C.text3} />
-                      <TextInput
-                        value={emailOtpInput}
-                        onChangeText={(v) => setEmailOtpInput(v.replace(/\D/g, "").slice(0, 6))}
-                        placeholder="000000"
-                        placeholderTextColor={C.text3}
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        style={{ flex: 1, color: C.text1, fontFamily: FONTS.black, fontSize: 22, letterSpacing: 8, paddingVertical: 14, paddingHorizontal: 12, textAlign: "center" }}
-                      />
-                    </View>
-                    {emailOtpDevHint && (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 9, borderRadius: 10, backgroundColor: "#F59E0B12", borderWidth: 1, borderColor: "#F59E0B40", marginBottom: 14 }}>
-                        <Text style={{ fontSize: 13 }}>🔧</Text>
-                        <Text style={{ flex: 1, color: "#F59E0B", fontFamily: FONTS.medium, fontSize: 11 }}>
-                          Dev mode email code: <Text style={{ fontFamily: FONTS.black }}>{emailOtpDevHint}</Text>
-                        </Text>
-                      </View>
-                    )}
-
-                    <Text style={{ color: C.text2, fontFamily: FONTS.medium, fontSize: 13, marginBottom: 8 }}>📱 Phone Code (sent to +91 {phone.replace(/\D/g, "").slice(-10)})</Text>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 18 }}>
-                      {otp.map((digit, idx) => (
-                        <TextInput key={idx} ref={r => { otpRefs.current[idx] = r; }} value={digit} onChangeText={v => handleOtpChange(v.slice(-1), idx)} keyboardType="numeric" maxLength={1}
-                          style={{ width: (width - 80) / 6, height: (width - 80) / 6, borderRadius: 14, borderWidth: 2.5, borderColor: digit ? "#3B82F6" : C.border, backgroundColor: digit ? "#3B82F615" : C.bg1, color: C.text1, fontFamily: FONTS.black, fontSize: 24, textAlign: "center" }}
-                        />
-                      ))}
-                    </View>
-                    <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 16 }}>
-                      {resendTimer > 0
-                        ? <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 13 }}>Resend in <Text style={{ color: "#3B82F6" }}>{resendTimer}s</Text></Text>
-                        : <Pressable onPress={handleSendOtp}><Text style={{ color: "#3B82F6", fontFamily: FONTS.semibold, fontSize: 13 }}>Resend OTP</Text></Pressable>
-                      }
-                    </View>
-                    <View style={{ backgroundColor: C.amberDim || C.yellow + "15", borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Icon name="Info" size={16} color={C.yellow} />
-                      <Text style={{ color: C.yellow, fontFamily: FONTS.regular, fontSize: 12 }}>Demo: enter any 6 digits to continue</Text>
-                    </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <Icon name="Phone" size={20} color="#3B82F6" />
+                    <Text style={{ color: C.text1, fontFamily: FONTS.medium, fontSize: 14, flex: 1 }}>{phone.trim()}</Text>
                   </View>
-                )}
+                </View>
               </View>
             )}
 
@@ -672,7 +558,7 @@ export default function MechanicSignup() {
               style={{ paddingVertical: 18, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 10 }}
             >
               <Text style={{ color: "white", fontFamily: FONTS.bold, fontSize: 16 }}>
-                {loading ? "Creating Account..." : step === 5 ? "Create Account & Start Earning" : step === 2 && !otpSent ? "Send OTP" : "Continue"}
+                {loading ? "Creating Account..." : step === 5 ? "Create Account & Start Earning" : "Continue"}
               </Text>
               <Icon name={step === 5 ? "CheckCircle" : "ArrowRight"} size={20} color="white" />
             </LinearGradient>
