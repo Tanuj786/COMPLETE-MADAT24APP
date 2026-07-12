@@ -1,6 +1,6 @@
 // Dynamic Expo config — see madat24-customer/app.config.js for explanation.
 
-const fallback = "http://192.168.29.121:4000/api";
+const fallback = "https://complete-madat24app-1.onrender.com/api";
 
 module.exports = ({ config }) => {
   const API_URL = process.env.API_URL || config.extra?.API_URL || fallback;

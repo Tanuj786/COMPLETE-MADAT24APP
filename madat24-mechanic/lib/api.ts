@@ -12,7 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
 const extra = (Constants.expoConfig?.extra ?? Constants.manifest?.extra) as { API_URL?: string } | undefined;
-export const BASE_URL: string = extra?.API_URL || "http://192.168.29.121:4000/api";
+export const BASE_URL: string = extra?.API_URL || "https://complete-madat24app-1.onrender.com/api";
 
 // ─── Token helpers ────────────────────────────────────────────────
 export const saveToken  = (t: string) => AsyncStorage.setItem("madat24_token", t);
