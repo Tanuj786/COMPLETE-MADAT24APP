@@ -60,6 +60,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "API_URL": "https://complete-madat24app-1.onrender.com/api",
+      "SENTRY_DSN": "",
+      "router": {},
+      "eas": {
+        "projectId": "c0794755-1db9-4916-983f-2cc77ee4a452"
+      }
+    },
+    "owner": "sinsta"
   }
 }

@@ -37,7 +37,9 @@
         "NSPhotoLibraryUsageDescription": "Madat24 Mechanic needs gallery access to upload service photos",
         "NSLocationWhenInUseUsageDescription": "Madat24 Mechanic shares your live location with the customer during a job",
         "NSLocationAlwaysUsageDescription": "Madat24 Mechanic uses background location so customers can track your arrival",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "plugins": [
@@ -67,6 +69,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "API_URL": "https://complete-madat24app-1.onrender.com/api",
+      "SENTRY_DSN": "",
+      "router": {},
+      "eas": {
+        "projectId": "3f974b7b-de3a-4d66-b1ab-cfbfe3ea58ee"
+      }
+    },
+    "owner": "sinsta"
   }
 }
