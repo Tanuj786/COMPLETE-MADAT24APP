@@ -31,7 +31,7 @@ function checkBackend(): Promise<boolean> {
   if (_backendCheck) return _backendCheck;
   _checkedAt = now;
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 2000);
+  const t = setTimeout(() => controller.abort(), 15000);
   _backendCheck = fetch(BASE_URL.replace("/api", "") + "/health", { signal: controller.signal })
     .then(r => (_backendOk = r.ok))
     .catch(() => (_backendOk = false))
@@ -57,10 +57,15 @@ async function callBackend<T>(
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
   const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 8000);
+  const tid = setTimeout(() => controller.abort(), 25000);
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (err: any) {
+    if (err?.name === "AbortError" || err instanceof TypeError) {
+      throw new Error(NO_BACKEND_MSG);
+    }
+    throw err;
   } finally {
     clearTimeout(tid);
   }
@@ -91,8 +96,6 @@ export async function apiSignup(data: {
   name: string; email: string; phone: string;
   password: string; role: "CUSTOMER" | "MECHANIC";
 }): Promise<{ token: string; user: ApiUser }> {
-  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
-
   const r = await callBackend<{ token: string; user: ApiUser }>(
     "/auth/signup",
     { method: "POST", body: JSON.stringify({ ...data, email: data.email.toLowerCase().trim() }) },
@@ -108,8 +111,6 @@ export async function apiSignup(data: {
 export async function apiLogin(data: {
   email: string; password: string; role: "CUSTOMER" | "MECHANIC";
 }): Promise<{ token: string; user: ApiUser }> {
-  if (!(await checkBackend())) throw new Error(NO_BACKEND_MSG);
-
   const r = await callBackend<{ token: string; user: ApiUser }>(
     "/auth/login",
     { method: "POST", body: JSON.stringify({ ...data, email: data.email.toLowerCase().trim() }) },
