@@ -20,6 +20,18 @@ export default function MechanicDashboard() {
   const { registerMechanic, updateMechanicOnline } = useNearbyStore();
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const { socket } = useSocket();
+
+  const publishCurrentLocation = async (online: boolean) => {
+    const ExpoLoc = require("expo-location");
+    const { status } = await ExpoLoc.requestForegroundPermissionsAsync();
+    if (status !== "granted") return null;
+    const loc = await ExpoLoc.getCurrentPositionAsync({ accuracy: ExpoLoc.Accuracy.Balanced });
+    const { latitude, longitude } = loc.coords;
+    sendLocationUpdate(socket, latitude, longitude);
+    await apiUpdateLocation(latitude, longitude, online);
+    return { latitude, longitude };
+  };
 
   // Register mechanic location when dashboard mounts / online status changes
   useEffect(() => {
@@ -54,25 +66,19 @@ export default function MechanicDashboard() {
   // Keep nearby registry in sync with online toggle
   useEffect(() => {
     if (user) updateMechanicOnline(user.id, isOnline);
-    // Tell backend about online status change
-    apiToggleOnline(isOnline).catch(() => {});
-  }, [isOnline, user?.id]);
+    if (isOnline) {
+      publishCurrentLocation(true).catch(() => apiToggleOnline(true).catch(() => {}));
+    } else {
+      apiToggleOnline(false).catch(() => {});
+    }
+  }, [isOnline, user?.id, socket]);
 
   // Send live GPS to backend every 10 seconds while online
-  const { socket } = useSocket();
   useEffect(() => {
     if (!isOnline || !user) return;
     const interval = setInterval(async () => {
       try {
-        const ExpoLoc = require("expo-location");
-        const { status } = await ExpoLoc.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          const loc = await ExpoLoc.getCurrentPositionAsync({ accuracy: ExpoLoc.Accuracy.Balanced });
-          const { latitude, longitude } = loc.coords;
-          // Send via Socket.IO (fast) and REST API (persistent)
-          sendLocationUpdate(socket, latitude, longitude);
-          apiUpdateLocation(latitude, longitude, true).catch(() => {});
-        }
+        await publishCurrentLocation(true);
       } catch {}
     }, 10000); // every 10 seconds
     return () => clearInterval(interval);

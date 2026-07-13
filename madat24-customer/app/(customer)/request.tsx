@@ -4,7 +4,7 @@
  * Step 2: Vehicle type (Car/Bike/Electric Bike/Cycle/Truck/Electric Car)
  * Step 3: Service type (General Repair/Puncture/Towing/Tyre Purchase + more)
  * Step 4: Searching nearby mechanics (Ola/Uber style — notifies all, first to accept gets job)
- *         Shows shops + public mechanics nearby within 5km
+ *         Shows shops + public mechanics nearby within 10km
  */
 
 import React, { useState, useRef, useEffect } from "react";
@@ -20,7 +20,7 @@ import * as ImagePicker from "expo-image-picker";
 import Icon from "~/lib/icons/Icon";
 import { FONTS } from "~/constants";
 import { useTheme } from "~/components/ui";
-import { useAuthStore, useCustomerStore } from "~/stores";
+import { useAuthStore } from "~/stores";
 import { apiCreateJob, apiGetNearbyMechanics } from "~/lib/api";
 import type { NearbyMechanic } from "~/lib/api";
 import { useSocket } from "~/hooks/useSocket";
@@ -181,7 +181,7 @@ function SearchingRadar({ vehicleType, serviceType }: { vehicleType: string; ser
         Searching Mechanics
       </Text>
       <Text style={{ color: "#AAAAAA", fontFamily: FONTS.regular, fontSize: 13, marginTop: 6, textAlign: "center" }}>
-        Notifying all mechanics within 5km{"\n"}First to accept gets the job · Ola/Uber style
+        Notifying all mechanics within 10km{"\n"}First to accept gets the job · Ola/Uber style
       </Text>
       <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
         <View style={{ backgroundColor: ORANGE + "20", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: ORANGE + "40" }}>
@@ -193,7 +193,7 @@ function SearchingRadar({ vehicleType, serviceType }: { vehicleType: string; ser
 }
 
 // ─── Mechanic card — shows photo/avatar, name, phone, shop, distance ──
-function MechanicCard({ mech, onDeploy, delay }: { mech: NearbyMechanic; onDeploy: () => void; delay: number }) {
+function MechanicCard({ mech, delay }: { mech: NearbyMechanic; delay: number }) {
   const op  = useRef(new Animated.Value(0)).current;
   const y   = useRef(new Animated.Value(30)).current;
   const sc  = useRef(new Animated.Value(0.95)).current;
@@ -229,7 +229,7 @@ function MechanicCard({ mech, onDeploy, delay }: { mech: NearbyMechanic; onDeplo
         <View style={{ height: 3, backgroundColor: mechColor, width: "100%" }} />
 
         <View style={{ padding: 16 }}>
-          {/* Row 1: Avatar + Name/Shop + Deploy */}
+          {/* Row 1: Avatar + Name/Shop + notified status */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
 
             {/* Profile photo / avatar */}
@@ -270,13 +270,13 @@ function MechanicCard({ mech, onDeploy, delay }: { mech: NearbyMechanic; onDeplo
               <Text style={{ color: "#666666", fontFamily: FONTS.regular, fontSize: 11 }}>{typeLabel}</Text>
             </View>
 
-            {/* Deploy button */}
-            <Pressable onPress={onDeploy} style={{ borderRadius: 14, overflow: "hidden" }}>
-              <LinearGradient colors={[ORANGE, ORANGE2]} style={{ paddingHorizontal: 18, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ color: "#FFFFFF", fontFamily: FONTS.black, fontSize: 13 }}>Deploy</Text>
-                <Text style={{ color: "rgba(255,255,255,0.7)", fontFamily: FONTS.regular, fontSize: 10 }}>⚡ Now</Text>
+            {/* Notified status */}
+            <View style={{ borderRadius: 14, overflow: "hidden" }}>
+              <LinearGradient colors={[TEAL, "#0891B2"]} style={{ paddingHorizontal: 14, paddingVertical: 10, alignItems: "center" }}>
+                <Text style={{ color: "#FFFFFF", fontFamily: FONTS.black, fontSize: 12 }}>Notified</Text>
+                <Text style={{ color: "rgba(255,255,255,0.75)", fontFamily: FONTS.regular, fontSize: 10 }}>Can accept</Text>
               </LinearGradient>
-            </Pressable>
+            </View>
           </View>
 
           {/* Divider */}
@@ -326,7 +326,6 @@ function MechanicCard({ mech, onDeploy, delay }: { mech: NearbyMechanic; onDeplo
 export default function CustomerRequest() {
   const C = useTheme();
   const { user } = useAuthStore();
-  const { addJob } = useCustomerStore();
   const params = useLocalSearchParams<{ service?: string }>();
 
   const [step, setStep]         = useState(1);
@@ -425,7 +424,7 @@ export default function CustomerRequest() {
 
     // Step 1 — Create job on backend.
     // This instantly broadcasts a push notification to ALL online mechanics
-    // within 5km: "Apke paas request aayi hai, ek customer hai yeh yeh need hai"
+    // within 10km: "Apke paas request aayi hai, ek customer hai yeh yeh need hai"
     let createdJobId: string | null = null;
     try {
       const result = await apiCreateJob({
@@ -458,7 +457,7 @@ export default function CustomerRequest() {
       });
     }
 
-    // Step 3 — Fetch ONLY real registered mechanics within 5km.
+    // Step 3 — Fetch ONLY real registered mechanics within 10km.
     // If none are registered/online → show empty state. No fake data ever.
     try {
       const { mechanics: nearby } = await apiGetNearbyMechanics(lat, lng);
@@ -470,54 +469,6 @@ export default function CustomerRequest() {
     setSearching(false);
   };
 
-  const deployMechanic = async (mech: NearbyMechanic) => {
-    Alert.alert(
-      `Deploy ${mech.name}?`,
-      `${mech.shopName || 'Mechanic'}\n⭐ ${mech.rating}  ·  ${mech.dist} km away  ·  ETA ${mech.eta}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm Dispatch ⚡",
-          onPress: async () => {
-            const job = {
-              id: `job-${Date.now()}`,
-              customerId: user?.id || "cust",
-              serviceType,
-              vehicleType,
-              status: "pending" as any,
-              location: {
-                address: address || "Current location",
-                city: city || "Unknown",
-                coordinates: coords ? { latitude: coords.lat, longitude: coords.lng } : undefined,
-              },
-              description,
-              mechanic: {
-                id: mech.id, name: mech.name, shopName: mech.shopName,
-                rating: mech.rating, phone: "",
-              },
-              customerMedia: [], progressMedia: [],
-              timestamps: { requested: new Date().toISOString() },
-            };
-            addJob(job as any);
-
-            // Try real backend
-            try {
-              await apiCreateJob({
-                serviceType, vehicleType,
-                address: address || "Current location",
-                city: city || "Unknown",
-                latitude: coords?.lat || 28.6139,
-                longitude: coords?.lng || 77.209,
-                description,
-              });
-            } catch { /* offline mode — job already added locally */ }
-
-            setSubmitted(true);
-          },
-        },
-      ],
-    );
-  };
 
   if (submitted) {
     return (
@@ -638,7 +589,7 @@ export default function CustomerRequest() {
         {step === 1 && (
           <AnimCard>
             <Text style={{ color: "#888888", fontFamily: FONTS.regular, fontSize: 13, marginBottom: 20, lineHeight: 20 }}>
-              We need your location to find mechanics within 5km of you.
+              We need your location to find mechanics within 10km of you.
             </Text>
 
             {/* Live GPS button */}
@@ -833,7 +784,7 @@ export default function CustomerRequest() {
                       {mechanics.length} Mechanic{mechanics.length !== 1 ? "s" : ""} Online
                     </Text>
                     <Text style={{ color: "#888888", fontFamily: FONTS.regular, fontSize: 12, marginTop: 3 }}>
-                      Within 5km · All notified · First to accept wins
+                      Within 10km · All notified · First to accept wins
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: TEAL + "20", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: TEAL + "40" }}>
@@ -846,12 +797,12 @@ export default function CustomerRequest() {
                 <View style={{ backgroundColor: ORANGE + "12", borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: ORANGE + "30", flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Text style={{ fontSize: 18 }}>⚡</Text>
                   <Text style={{ color: ORANGE, fontFamily: FONTS.medium, fontSize: 13, flex: 1, lineHeight: 19 }}>
-                    All mechanics have been notified. Tap Deploy to confirm one — or wait for one to accept automatically.
+                    All nearby mechanics have been notified. The first mechanic to accept will get this request automatically.
                   </Text>
                 </View>
 
                 {mechanics.map((mech, i) => (
-                  <MechanicCard key={mech.id} mech={mech} delay={i * 120} onDeploy={() => deployMechanic(mech)} />
+                  <MechanicCard key={mech.id} mech={mech} delay={i * 120} />
                 ))}
 
                 {mechanics.length === 0 && (
@@ -861,7 +812,7 @@ export default function CustomerRequest() {
                       No Mechanics Nearby
                     </Text>
                     <Text style={{ color: "#888888", fontFamily: FONTS.regular, fontSize: 13, textAlign: "center", lineHeight: 21, marginBottom: 20 }}>
-                      {"No registered mechanics are online within 5km of your location right now.\n\nYour request has been saved. Any mechanic who comes online nearby will be automatically notified."}
+                      {"No registered mechanics are online within 10km of your location right now.\n\nYour request has been saved. Any mechanic who comes online nearby will be automatically notified."}
                     </Text>
                     <View style={{ backgroundColor: "#F9731614", borderRadius: 14, padding: 14, width: "100%", borderWidth: 1, borderColor: "#F9731630", marginBottom: 16 }}>
                       <Text style={{ color: "#F97316", fontFamily: FONTS.semibold, fontSize: 12, textAlign: "center" }}>

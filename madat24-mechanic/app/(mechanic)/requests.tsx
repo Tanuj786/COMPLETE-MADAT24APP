@@ -6,9 +6,9 @@ import { formatDistanceToNow } from "date-fns";
 import Icon from "~/lib/icons/Icon";
 import { PulseDot, useTheme } from "~/components/ui";
 import { FONTS, SERVICES } from "~/constants";
-import { useMechanicStore, useNotifStore, useAuthStore, useNearbyStore } from "~/stores";
+import { useMechanicStore, useNotifStore, useAuthStore } from "~/stores";
 import { useSocket } from "~/hooks/useSocket";
-import { apiAcceptRequest } from "~/lib/api";
+import { apiAcceptRequest, apiGetPendingRequests, apiRejectRequest } from "~/lib/api";
 
 // ── 30-second countdown ───────────────────────────────────────────
 function Countdown({ seconds, onExpire }: { seconds: number; onExpire: () => void }) {
@@ -81,8 +81,18 @@ export default function Requests() {
   const { requests, acceptRequest, rejectRequest, removeRequest, isOnline, addIncomingRequest } = useMechanicStore();
   const { addNotification } = useNotifStore();
   const { user } = useAuthStore();
-  const { markJobAccepted } = useNearbyStore();
   const { socket } = useSocket();
+
+  React.useEffect(() => {
+    let cancelled = false;
+    apiGetPendingRequests()
+      .then(({ requests }) => {
+        if (cancelled) return;
+        requests.forEach((req: any) => addIncomingRequest(req));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Listen for real-time events from backend
   React.useEffect(() => {
@@ -90,6 +100,7 @@ export default function Requests() {
     const onNew = (payload: any) => {
       // Backend sends { jobId, distance } OR a full request object
       const req = payload?.job ? payload.job : payload;
+      if (!req?.id) return;
       addIncomingRequest(req);
       const { showToast } = require("~/components/ui/Toast");
       showToast(`New job nearby — ${payload?.distance?.toFixed?.(1) ?? "?"} km`, "info");
@@ -144,7 +155,14 @@ export default function Requests() {
   const handleDecline = (id: string, name: string) => {
     Alert.alert("Decline Request", `Decline ${name}'s request?`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Decline", style: "destructive", onPress: () => rejectRequest(id) },
+      {
+        text: "Decline",
+        style: "destructive",
+        onPress: () => {
+          rejectRequest(id);
+          apiRejectRequest(id).catch(() => {});
+        },
+      },
     ]);
   };
 
@@ -162,7 +180,7 @@ export default function Requests() {
         <Text style={{ color: C.text2, fontFamily: FONTS.bold, fontSize: 18, marginBottom: 8 }}>No Incoming Requests</Text>
         <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 14, textAlign: "center", lineHeight: 22 }}>
           {isOnline
-            ? "You're online. Requests from customers within 5 km will appear here."
+            ? "You're online. Requests from customers within 10 km will appear here."
             : "Go Online from the Dashboard to start receiving customer requests."}
         </Text>
         {!isOnline && (
@@ -184,7 +202,7 @@ export default function Requests() {
           <Text style={{ color: C.text1, fontFamily: FONTS.black, fontSize: 26 }}>Incoming Requests</Text>
         </View>
         <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 13 }}>
-          {requests.length} pending · Accept within 30 seconds · 5 km radius
+          {requests.length} pending · Accept within 30 seconds · 10 km radius
         </Text>
       </LinearGradient>
 
@@ -225,9 +243,9 @@ export default function Requests() {
                       <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 12 }}>{req.customerPhone}</Text>
                     </View>
                     {req.distance !== undefined && (
-                      <View style={{ backgroundColor: req.distance <= 5 ? C.green + "20" : C.orange + "20", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: req.distance <= 5 ? C.green + "50" : C.orange + "50" }}>
-                        <Text style={{ color: req.distance <= 5 ? C.green : C.orange, fontFamily: FONTS.bold, fontSize: 12 }}>
-                          {req.distance} km {req.distance <= 5 ? "✓" : ""}
+                      <View style={{ backgroundColor: req.distance <= 10 ? C.green + "20" : C.orange + "20", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: req.distance <= 10 ? C.green + "50" : C.orange + "50" }}>
+                        <Text style={{ color: req.distance <= 10 ? C.green : C.orange, fontFamily: FONTS.bold, fontSize: 12 }}>
+                          {req.distance} km {req.distance <= 10 ? "✓" : ""}
                         </Text>
                       </View>
                     )}

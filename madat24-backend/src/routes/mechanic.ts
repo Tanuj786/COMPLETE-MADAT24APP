@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "../auth";
 import { emitToUser, emitToJob } from "../socket";
 import { broadcastJobTaken } from "../dispatch";
 import { sendPushToUser } from "../push";
+import { toServiceRequest } from "../jobPresenter";
 
 const r = Router();
 
@@ -11,6 +12,46 @@ const r = Router();
 r.use(requireAuth, requireRole("MECHANIC"));
 
 const splitCsv = (s: string | null | undefined) => (s || "").split(",").map(x => x.trim()).filter(Boolean);
+
+const parseNotificationData = (data: string | null) => {
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as { jobId?: string; distance?: number };
+  } catch {
+    return null;
+  }
+};
+
+r.get("/requests", async (req, res) => {
+  const notifications = await prisma.notification.findMany({
+    where: { userId: req.user!.id, type: "job_request" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const distances = new Map<string, number | undefined>();
+  const jobIds = notifications
+    .map(n => parseNotificationData(n.data))
+    .filter((d): d is { jobId: string; distance?: number } => !!d?.jobId)
+    .map(d => {
+      distances.set(d.jobId, d.distance);
+      return d.jobId;
+    });
+
+  if (!jobIds.length) return res.json({ requests: [] });
+
+  const jobs = await prisma.job.findMany({
+    where: { id: { in: jobIds }, status: "pending", mechanicId: null },
+    include: {
+      customer: { select: { id: true, name: true, phone: true } },
+      media: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json({
+    requests: jobs.map(job => toServiceRequest(job, distances.get(job.id))),
+  });
+});
 
 // ─── POST /api/mechanic/requests/:id/accept ─────────────────────────
 // Atomic claim — uses updateMany with WHERE status="pending" so two

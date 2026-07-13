@@ -10,8 +10,9 @@ import { prisma } from "./prisma";
 import { emitToUser } from "./socket";
 import { env } from "./env";
 import { sendPushToUser } from "./push";
+import { toServiceRequest } from "./jobPresenter";
 
-export const RADIUS_KM = env.NEARBY_RADIUS_KM;
+export const RADIUS_KM = Math.max(10, env.NEARBY_RADIUS_KM);
 
 // Haversine distance in km between two lat/lng points
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -91,7 +92,18 @@ export async function alertMechanic(
       data: JSON.stringify({ jobId, distance }),
     },
   });
-  emitToUser(mechanicUserId, "new_job_request", { jobId, distance });
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: {
+      customer: { select: { id: true, name: true, phone: true } },
+      media: true,
+    },
+  });
+  emitToUser(mechanicUserId, "new_job_request", {
+    jobId,
+    distance,
+    job: job ? toServiceRequest(job, distance) : undefined,
+  });
   sendPushToUser(mechanicUserId, {
     title: "New Job Request! 🔔",
     body: `${serviceType.replace(/-/g, " ")} • ${distance.toFixed(1)} km away — tap to accept`,

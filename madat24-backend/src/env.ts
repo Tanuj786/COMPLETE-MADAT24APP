@@ -43,7 +43,7 @@ const Schema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default("claude-haiku-4-5"),
 
-  NEARBY_RADIUS_KM: z.coerce.number().positive().default(5),
+  NEARBY_RADIUS_KM: z.coerce.number().positive().default(10),
 
   RATE_LIMIT_AUTH_MAX: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_OTP_MAX: z.coerce.number().int().positive().default(5),

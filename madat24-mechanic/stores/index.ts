@@ -189,7 +189,7 @@ export const useMechanicStore = create<MechanicStore>((set, get) => ({
 
   // Called by request screen when customer confirms
   addIncomingRequest: (req) =>
-    set(s => ({ requests: [req, ...s.requests] })),
+    set(s => s.requests.some(r => r.id === req.id) ? s : { requests: [req, ...s.requests] }),
 
   // Remove a specific request by ID (used when another mechanic accepts it first)
   removeRequest: (id) =>
@@ -367,7 +367,7 @@ export const useChatStore = create<ChatStore>(set => ({
 }));
 
 // ─── NEARBY / BROADCAST ────────────────────────────────────────────
-// Tracks all registered mechanic locations and handles 5km broadcast logic.
+// Tracks all registered mechanic locations and handles 10km broadcast logic.
 
 export interface MechanicRegistration {
   mechanicId: string;
@@ -421,7 +421,7 @@ export const useNearbyStore = create<NearbyStore>((set, get) => ({
         : s.mechanics,
     })),
 
-  broadcastRequest: (req, radiusKm = 5) => {
+  broadcastRequest: (req, radiusKm = 10) => {
     const { mechanics } = get();
     const { lat: cLat, lng: cLng } = req.location.coordinates;
     const matched: string[] = [];

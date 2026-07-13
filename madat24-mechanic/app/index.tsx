@@ -431,7 +431,7 @@ export default function Landing() {
         <View style={{ paddingHorizontal: 20, marginTop: 44 }}>
           <Text style={{ color: GREY2, fontFamily: FONTS.bold, fontSize: 9, letterSpacing: 4, textTransform: "uppercase", marginBottom: 18 }}>How It Works</Text>
           {[
-            { n: "01", icon: "🔔", title: "Get Job Alerts",     desc: "Customers within 5 km ping you the moment they need help.", color: ORANGE },
+            { n: "01", icon: "🔔", title: "Get Job Alerts",     desc: "Customers within 10 km ping you the moment they need help.", color: ORANGE },
             { n: "02", icon: "🚗", title: "Accept & Drive",     desc: "One-tap accept. Live navigation to the customer's location.", color: BLUE   },
             { n: "03", icon: "💰", title: "Complete & Earn",    desc: "Generate the invoice in-app. Get paid on the spot.",          color: WHITE  },
           ].map((s, i) => (

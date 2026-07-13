@@ -196,7 +196,7 @@ export interface CreateJobInput {
 export const apiCreateJob = (d: CreateJobInput) =>
   callBackend<{ job: any; mechanicsAlerted: number }>("/jobs", { method: "POST", body: JSON.stringify(d) });
 
-// ─── Real registered mechanics within 5km (only online ones) ──────
+// ─── Real registered mechanics within 10km (only online ones) ──────
 export interface NearbyMechanic {
   id:           string;
   name:         string;
@@ -214,7 +214,7 @@ export interface NearbyMechanic {
   longitude:    number;
 }
 
-// Fetch only real registered mechanics who are online and within 5km.
+// Fetch only real registered mechanics who are online and within 10km.
 // Returns empty array if none — no mock/fallback data.
 export const apiGetNearbyMechanics = (lat: number, lng: number) =>
   callBackend<{ mechanics: NearbyMechanic[]; total: number }>(
