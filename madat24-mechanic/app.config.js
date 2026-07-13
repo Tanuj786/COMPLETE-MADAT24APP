@@ -1,5 +1,7 @@
 // Dynamic Expo config — see madat24-customer/app.config.js for explanation.
 
+require("dotenv").config({ path: __dirname + "/.env" });
+
 const fallback = "https://complete-madat24app-1.onrender.com/api";
 
 module.exports = ({ config }) => {

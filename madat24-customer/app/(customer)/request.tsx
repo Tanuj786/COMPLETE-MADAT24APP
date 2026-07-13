@@ -21,7 +21,7 @@ import Icon from "~/lib/icons/Icon";
 import { FONTS } from "~/constants";
 import { useTheme } from "~/components/ui";
 import { useAuthStore } from "~/stores";
-import { apiCreateJob, apiGetNearbyMechanics } from "~/lib/api";
+import { apiCancelJob, apiCreateJob, apiGetNearbyMechanics } from "~/lib/api";
 import type { NearbyMechanic } from "~/lib/api";
 import { useSocket } from "~/hooks/useSocket";
 
@@ -342,6 +342,8 @@ export default function CustomerRequest() {
   const [mechanics, setMechanics] = useState<NearbyMechanic[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [acceptedMechanic, setAcceptedMechanic] = useState<NearbyMechanic | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const { socket } = useSocket();
 
   // Auto-pre-select service from params
@@ -437,6 +439,7 @@ export default function CustomerRequest() {
         description,
       });
       createdJobId = result?.job?.id ?? null;
+      setActiveJobId(createdJobId);
     } catch {
       // Offline / backend not running — still show nearby list
     }
@@ -467,6 +470,37 @@ export default function CustomerRequest() {
     }
 
     setSearching(false);
+  };
+
+  const cancelActiveRequest = () => {
+    if (!activeJobId || cancelling) return;
+    Alert.alert("Cancel Request", "Cancel this service request?", [
+      { text: "Keep Waiting", style: "cancel" },
+      {
+        text: "Cancel Request",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setCancelling(true);
+            await apiCancelJob(activeJobId);
+            socket?.off("job_accepted");
+            setActiveJobId(null);
+            setSubmitted(false);
+            setAcceptedMechanic(null);
+            setMechanics([]);
+            setStep(1);
+            const { showToast } = require("~/components/ui/Toast");
+            showToast("Request cancelled", "info");
+            router.replace("/(customer)/dashboard");
+          } catch (err: any) {
+            const { showToast } = require("~/components/ui/Toast");
+            showToast(err?.message || "Could not cancel request", "error");
+          } finally {
+            setCancelling(false);
+          }
+        },
+      },
+    ]);
   };
 
 
@@ -555,6 +589,22 @@ export default function CustomerRequest() {
               Waiting for a mechanic to accept...
             </Text>
           </View>
+        )}
+
+        {!acceptedMechanic && activeJobId && (
+          <Pressable
+            onPress={cancelActiveRequest}
+            disabled={cancelling}
+            style={{
+              marginTop: 14, borderRadius: 16, width: "100%",
+              backgroundColor: "#EF44441A", borderWidth: 1, borderColor: "#EF444455",
+              paddingVertical: 16, alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#EF4444", fontFamily: FONTS.black, fontSize: 15 }}>
+              {cancelling ? "Cancelling..." : "Cancel Request"}
+            </Text>
+          </Pressable>
         )}
 
         <Pressable
@@ -800,6 +850,21 @@ export default function CustomerRequest() {
                     All nearby mechanics have been notified. The first mechanic to accept will get this request automatically.
                   </Text>
                 </View>
+
+                {activeJobId && (
+                  <Pressable
+                    onPress={cancelActiveRequest}
+                    disabled={cancelling}
+                    style={{
+                      backgroundColor: "#EF44441A", borderRadius: 14, paddingVertical: 14,
+                      alignItems: "center", borderWidth: 1, borderColor: "#EF444455", marginBottom: 16,
+                    }}
+                  >
+                    <Text style={{ color: "#EF4444", fontFamily: FONTS.black, fontSize: 14 }}>
+                      {cancelling ? "Cancelling..." : "Cancel Request"}
+                    </Text>
+                  </Pressable>
+                )}
 
                 {mechanics.map((mech, i) => (
                   <MechanicCard key={mech.id} mech={mech} delay={i * 120} />
