@@ -21,7 +21,7 @@ import Icon from "~/lib/icons/Icon";
 import { FONTS } from "~/constants";
 import { useTheme } from "~/components/ui";
 import { useAuthStore } from "~/stores";
-import { apiCancelJob, apiCreateJob, apiGetNearbyMechanics } from "~/lib/api";
+import { BASE_URL, apiCancelJob, apiCreateJob, apiGetNearbyMechanics } from "~/lib/api";
 import type { NearbyMechanic } from "~/lib/api";
 import { useSocket } from "~/hooks/useSocket";
 
@@ -440,8 +440,11 @@ export default function CustomerRequest() {
       });
       createdJobId = result?.job?.id ?? null;
       setActiveJobId(createdJobId);
-    } catch {
-      // Offline / backend not running — still show nearby list
+    } catch (err: any) {
+      setSearching(false);
+      setStep(3);
+      Alert.alert("Request Not Created", err?.message || "Could not create request on the server.");
+      return;
     }
 
     // Step 2 — Listen on Socket.IO for the first mechanic to accept.
@@ -630,6 +633,11 @@ export default function CustomerRequest() {
           {step === 1 ? "Set Location" : step === 2 ? "Vehicle Type" : step === 3 ? "Service Needed" : "Nearby Mechanics"}
         </Text>
       </View>
+      {__DEV__ && (
+        <Text style={{ color: "#666666", fontFamily: FONTS.regular, fontSize: 10, paddingHorizontal: 16, paddingBottom: 4 }}>
+          API {BASE_URL}
+        </Text>
+      )}
 
       <StepBar step={step} />
 
@@ -851,7 +859,7 @@ export default function CustomerRequest() {
                   </Text>
                 </View>
 
-                {activeJobId && (
+                {activeJobId && mechanics.length > 0 && (
                   <Pressable
                     onPress={cancelActiveRequest}
                     disabled={cancelling}
@@ -884,6 +892,21 @@ export default function CustomerRequest() {
                         ⏳ We will notify you as soon as a mechanic accepts
                       </Text>
                     </View>
+                    {activeJobId && (
+                      <Pressable
+                        onPress={cancelActiveRequest}
+                        disabled={cancelling}
+                        style={{
+                          width: "100%", backgroundColor: "#EF44441A", borderRadius: 14,
+                          paddingVertical: 15, alignItems: "center", borderWidth: 1,
+                          borderColor: "#EF444455", marginBottom: 12,
+                        }}
+                      >
+                        <Text style={{ color: "#EF4444", fontFamily: FONTS.black, fontSize: 15 }}>
+                          {cancelling ? "Cancelling..." : "Cancel Request"}
+                        </Text>
+                      </Pressable>
+                    )}
                     <Pressable onPress={() => router.replace("/(customer)/dashboard")} style={{ width: "100%", borderRadius: 14, overflow: "hidden" }}>
                       <LinearGradient colors={[ORANGE, ORANGE2]} style={{ paddingVertical: 16, alignItems: "center" }}>
                         <Text style={{ color: "#FFFFFF", fontFamily: FONTS.black, fontSize: 15 }}>Go to Dashboard</Text>

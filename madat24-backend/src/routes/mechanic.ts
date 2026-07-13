@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../auth";
 import { emitToUser, emitToJob } from "../socket";
-import { broadcastJobTaken } from "../dispatch";
+import { RADIUS_KM, alertMechanic, broadcastJobTaken, haversineKm } from "../dispatch";
 import { sendPushToUser } from "../push";
 import { toServiceRequest } from "../jobPresenter";
 
@@ -21,6 +21,30 @@ const parseNotificationData = (data: string | null) => {
     return null;
   }
 };
+
+const splitServices = (s: string | null | undefined) =>
+  (s || "").split(",").map(x => x.trim()).filter(Boolean);
+
+async function alertPendingJobsForMechanic(mechanicUserId: string, latitude: number, longitude: number) {
+  const profile = await prisma.mechanicProfile.findUnique({
+    where: { userId: mechanicUserId },
+    select: { services: true },
+  });
+  const services = splitServices(profile?.services);
+  const jobs = await prisma.job.findMany({
+    where: { status: "pending", mechanicId: null },
+    select: { id: true, latitude: true, longitude: true, serviceType: true },
+  });
+
+  let alerted = 0;
+  for (const job of jobs) {
+    const distance = Number(haversineKm(latitude, longitude, job.latitude, job.longitude).toFixed(2));
+    if (distance > RADIUS_KM) continue;
+    if (services.length && !services.includes(job.serviceType)) continue;
+    if (await alertMechanic(job.id, mechanicUserId, job.serviceType, distance)) alerted++;
+  }
+  return alerted;
+}
 
 r.get("/requests", async (req, res) => {
   const notifications = await prisma.notification.findMany({
@@ -231,17 +255,22 @@ r.patch("/location", async (req, res) => {
   });
   // Broadcast to anyone tracking this mechanic
   emitToUser(req.user!.id, "mechanic_location", { mechanicId: req.user!.id, latitude, longitude });
-  res.json({ ok: true });
+  const pendingJobsAlerted = isOnline ? await alertPendingJobsForMechanic(req.user!.id, latitude, longitude) : 0;
+  res.json({ ok: true, pendingJobsAlerted });
 });
 
 // ─── PATCH /api/mechanic/online ─────────────────────────────────────
 r.patch("/online", async (req, res) => {
   const { isOnline } = req.body || {};
-  await prisma.mechanicProfile.update({
+  const profile = await prisma.mechanicProfile.update({
     where: { userId: req.user!.id },
     data: { isOnline: !!isOnline, lastSeenAt: new Date() },
   });
-  res.json({ ok: true, isOnline: !!isOnline });
+  const pendingJobsAlerted =
+    isOnline && profile.latitude != null && profile.longitude != null
+      ? await alertPendingJobsForMechanic(req.user!.id, profile.latitude, profile.longitude)
+      : 0;
+  res.json({ ok: true, isOnline: !!isOnline, pendingJobsAlerted });
 });
 
 // ─── GET /api/mechanic/profile ──────────────────────────────────────

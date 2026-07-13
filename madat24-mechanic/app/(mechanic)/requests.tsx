@@ -8,7 +8,7 @@ import { PulseDot, useTheme } from "~/components/ui";
 import { FONTS, SERVICES } from "~/constants";
 import { useMechanicStore, useNotifStore, useAuthStore } from "~/stores";
 import { useSocket } from "~/hooks/useSocket";
-import { apiAcceptRequest, apiGetPendingRequests, apiRejectRequest } from "~/lib/api";
+import { BASE_URL, apiAcceptRequest, apiGetPendingRequests, apiRejectRequest } from "~/lib/api";
 
 // ── 30-second countdown ───────────────────────────────────────────
 function Countdown({ seconds, onExpire }: { seconds: number; onExpire: () => void }) {
@@ -172,6 +172,7 @@ export default function Requests() {
       <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: C.border }}>
         <Text style={{ color: C.text1, fontFamily: FONTS.black, fontSize: 26 }}>Incoming Requests</Text>
         <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 13, marginTop: 4 }}>No pending requests</Text>
+        {__DEV__ && <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 10, marginTop: 4 }}>API {BASE_URL}</Text>}
       </View>
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
         <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: C.bg1, alignItems: "center", justifyContent: "center", marginBottom: 20, borderWidth: 1, borderColor: C.border }}>
@@ -204,6 +205,7 @@ export default function Requests() {
         <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 13 }}>
           {requests.length} pending · Accept within 30 seconds · 10 km radius
         </Text>
+        {__DEV__ && <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 10, marginTop: 4 }}>API {BASE_URL}</Text>}
       </LinearGradient>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 }}>
