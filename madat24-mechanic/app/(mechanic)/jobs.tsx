@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useCallback, useState, useRef } from "react";
 import {
   View, Text, ScrollView, Pressable, TextInput,
   Alert, Modal, Image, Platform, Animated,
@@ -14,6 +14,8 @@ import { TrackingMap } from "~/components/shared/TrackingMap";
 import { PhotoStrip, selectAndUploadPhoto } from "~/components/shared/PhotoPicker";
 import type { Invoice, MediaItem, ChatMessage } from "~/types";
 import { formatDistanceToNow } from "date-fns";
+import { useFocusEffect } from "expo-router";
+import { apiGetMechJobs } from "~/lib/api";
 
 // ── Photo fullscreen ──────────────────────────────────────────────
 function PhotoFull({ uri, onClose }: { uri: string; onClose: () => void }) {
@@ -455,8 +457,20 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
 // ── Main Screen ───────────────────────────────────────────────────
 export default function ActiveJobs() {
   const C = useTheme();
-  const { activeJobs, completedJobs } = useMechanicStore();
+  const { activeJobs, completedJobs, syncJobsFromBackend } = useMechanicStore();
   const [tab, setTab] = useState<"active" | "completed">("active");
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      apiGetMechJobs()
+        .then(({ jobs }) => {
+          if (!cancelled) syncJobsFromBackend(jobs);
+        })
+        .catch(() => {});
+      return () => { cancelled = true; };
+    }, [syncJobsFromBackend]),
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>

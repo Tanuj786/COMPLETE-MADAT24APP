@@ -145,6 +145,55 @@ export type ActiveJob = {
   invoice?: Invoice;
 };
 
+const mediaFromBackend = (media: any[] | undefined, category: string): MediaItem[] =>
+  (media || [])
+    .filter(m => !category || m.category === category)
+    .map(m => ({
+      id: m.id,
+      type: m.mimeType?.startsWith?.("video/") ? "video" : "photo",
+      uri: m.url || m.uri,
+      uploadedAt: new Date(m.uploadedAt || Date.now()).toISOString(),
+      uploadedBy: m.uploadedBy || "",
+    }));
+
+const activeJobFromBackend = (job: any): ActiveJob => ({
+  id: job.id,
+  serviceType: job.serviceType,
+  status: job.status === "in-progress" ? "in-progress" : "accepted",
+  location: { address: job.address || "", city: job.city || "" },
+  customer: job.customer ? { id: job.customer.id, name: job.customer.name, phone: job.customer.phone } : undefined,
+  vehicleInfo: {
+    type: job.vehicleType || "car",
+    make: job.vehicleMake || undefined,
+    model: job.vehicleModel || undefined,
+  },
+  description: job.description || undefined,
+  timestamps: {
+    requested: new Date(job.requestedAt || job.createdAt || Date.now()).toISOString(),
+    accepted: job.acceptedAt ? new Date(job.acceptedAt).toISOString() : undefined,
+    started: job.startedAt ? new Date(job.startedAt).toISOString() : undefined,
+  },
+  customerMedia: mediaFromBackend(job.media, "customer"),
+  progressMedia: mediaFromBackend(job.media, "progress"),
+  completionMedia: mediaFromBackend(job.media, "completion"),
+  invoice: job.invoice
+    ? {
+        id: job.invoice.id,
+        jobId: job.id,
+        invoiceNumber: job.invoice.invoiceNumber,
+        date: new Date(job.invoice.createdAt || Date.now()).toISOString(),
+        shopInfo: { name: "Mechanic Shop", address: "", phone: "" },
+        customerInfo: { name: job.customer?.name || "", phone: job.customer?.phone || "" },
+        lineItems: [],
+        subtotal: job.invoice.subtotal || 0,
+        tax: job.invoice.tax || 0,
+        total: job.invoice.total || 0,
+        paymentStatus: job.invoice.paymentStatus || "pending",
+        paymentMethod: job.invoice.paymentMethod || undefined,
+      }
+    : undefined,
+});
+
 interface MechanicStore {
   isOnline: boolean;
   toggleOnline: () => void;
@@ -158,6 +207,7 @@ interface MechanicStore {
   setShopProfile: (sp: ShopProfile) => void;
   updateShopProfile: (p: Partial<ShopProfile>) => void;
   setMetrics: (m: MechanicMetrics) => void;
+  syncJobsFromBackend: (jobs: any[]) => void;
   addIncomingRequest: (req: ServiceRequest) => void;   // called when customer sends request
   removeRequest: (id: string) => void;                 // remove after another mechanic accepts
   acceptRequest: (id: string) => void;
@@ -186,6 +236,20 @@ export const useMechanicStore = create<MechanicStore>((set, get) => ({
   setShopProfile: (sp) => set({ shopProfile: sp }),
   updateShopProfile: (p) => set(s => ({ shopProfile: s.shopProfile ? { ...s.shopProfile, ...p } : null })),
   setMetrics: (m) => set({ metrics: m }),
+  syncJobsFromBackend: (jobs) =>
+    set(s => {
+      const active = jobs
+        .filter(j => j.status === "accepted" || j.status === "in-progress")
+        .map(activeJobFromBackend);
+      const completed = jobs
+        .filter(j => j.status === "completed")
+        .map(activeJobFromBackend);
+      return {
+        activeJobs: active,
+        completedJobs: completed.length ? completed : s.completedJobs,
+        requests: s.requests.filter(r => !active.some(j => j.id === r.id)),
+      };
+    }),
 
   // Called by request screen when customer confirms
   addIncomingRequest: (req) =>
@@ -228,7 +292,7 @@ export const useMechanicStore = create<MechanicStore>((set, get) => ({
       });
       return {
         requests: s.requests.filter(r => r.id !== id),
-        activeJobs: [...s.activeJobs, job],
+        activeJobs: s.activeJobs.some(j => j.id === id) ? s.activeJobs : [...s.activeJobs, job],
       };
     }),
 

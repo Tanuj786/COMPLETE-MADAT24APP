@@ -8,7 +8,7 @@ import { PulseDot, useTheme } from "~/components/ui";
 import { FONTS, SERVICES } from "~/constants";
 import { useMechanicStore, useNotifStore, useAuthStore } from "~/stores";
 import { useSocket } from "~/hooks/useSocket";
-import { BASE_URL, apiAcceptRequest, apiGetPendingRequests, apiRejectRequest } from "~/lib/api";
+import { BASE_URL, apiAcceptRequest, apiGetMechJobs, apiGetPendingRequests, apiRejectRequest } from "~/lib/api";
 
 // ── 30-second countdown ───────────────────────────────────────────
 function Countdown({ seconds, onExpire }: { seconds: number; onExpire: () => void }) {
@@ -78,7 +78,7 @@ function PhotoPreview({ media }: { media: any[] }) {
 
 export default function Requests() {
   const C = useTheme();
-  const { requests, acceptRequest, rejectRequest, removeRequest, isOnline, addIncomingRequest } = useMechanicStore();
+  const { requests, acceptRequest, rejectRequest, removeRequest, isOnline, addIncomingRequest, syncJobsFromBackend } = useMechanicStore();
   const { addNotification } = useNotifStore();
   const { user } = useAuthStore();
   const { socket } = useSocket();
@@ -131,6 +131,9 @@ export default function Requests() {
       // Backend handles first-accept-wins atomically (Prisma updateMany)
       await apiAcceptRequest(id);
       acceptRequest(id);
+      apiGetMechJobs()
+        .then(({ jobs }) => syncJobsFromBackend(jobs))
+        .catch(() => {});
       const { showToast } = require("~/components/ui/Toast");
       showToast("Job accepted — head to Jobs tab", "success");
       if (user) {

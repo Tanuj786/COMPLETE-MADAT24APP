@@ -98,7 +98,14 @@ r.post("/requests/:id/accept", async (req, res) => {
     return res.status(409).json({ error: "Another mechanic just took this job", status: job.status });
   }
 
-  const updated = await prisma.job.findUnique({ where: { id: req.params.id } });
+  const updated = await prisma.job.findUnique({
+    where: { id: req.params.id },
+    include: {
+      invoice: true,
+      customer: { select: { id: true, name: true, phone: true } },
+      media: true,
+    },
+  });
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
     include: { mechanicProfile: true },
