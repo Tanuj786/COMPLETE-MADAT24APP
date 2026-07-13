@@ -89,7 +89,19 @@ r.post("/", requireAuth, requireRole("CUSTOMER"), jobsLimiter, validate(CreateJo
 r.get("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
   const jobs = await prisma.job.findMany({
     where: { customerId: req.user!.id },
-    include: { invoice: true, mechanic: { select: { id: true, name: true, phone: true } }, media: true },
+    include: {
+      invoice: true,
+      customer: { select: { id: true, name: true, phone: true } },
+      mechanic: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          mechanicProfile: true,
+        },
+      },
+      media: true,
+    },
     orderBy: { createdAt: "desc" },
   });
   res.json({ jobs });

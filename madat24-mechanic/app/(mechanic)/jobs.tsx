@@ -15,7 +15,7 @@ import { PhotoStrip, selectAndUploadPhoto } from "~/components/shared/PhotoPicke
 import type { Invoice, MediaItem, ChatMessage } from "~/types";
 import { formatDistanceToNow } from "date-fns";
 import { useFocusEffect } from "expo-router";
-import { apiGetMechJobs } from "~/lib/api";
+import { apiCompleteJob, apiGetMechJobs, apiStartJob } from "~/lib/api";
 
 // ── Photo fullscreen ──────────────────────────────────────────────
 function PhotoFull({ uri, onClose }: { uri: string; onClose: () => void }) {
@@ -156,7 +156,7 @@ function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: Active
   const C = useTheme();
   const [items, setItems] = useState([{ desc: "", qty: "1", price: "" }]);
   const [submitting, setSubmitting] = useState(false);
-  const { completeJob, shopProfile, addCompletionMedia } = useMechanicStore();
+  const { completeJob, shopProfile, addCompletionMedia, syncJobsFromBackend } = useMechanicStore();
   const { addNotification } = useNotifStore();
 
   const addItem = () => setItems(p => [...p, { desc: "", qty: "1", price: "" }]);
@@ -181,6 +181,19 @@ function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: Active
       lineItems: valid.map((it, i) => ({ id: String(i + 1), description: it.desc, quantity: parseInt(it.qty) || 1, unitPrice: parseFloat(it.price) || 0, total: (parseFloat(it.price) || 0) * (parseInt(it.qty) || 1) })),
       subtotal, tax, total, paymentStatus: "pending",
     };
+    try {
+      await apiCompleteJob(job.id, invoice.lineItems.map(it => ({
+        description: it.description,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        total: it.total,
+      })));
+      apiGetMechJobs().then(({ jobs }) => syncJobsFromBackend(jobs)).catch(() => {});
+    } catch (err: any) {
+      setSubmitting(false);
+      Alert.alert("Invoice Not Sent", err?.message || "Could not complete the job on the server.");
+      return;
+    }
     completeJob(job.id, total, invoice);
     addNotification({ id: `n-mech-done-${Date.now()}`, userId: "mech-demo", type: "job_completed", title: "Invoice Sent ✅", message: `Invoice ${invNum} sent to ${job.customer?.name}. Total ₹${total.toFixed(2)}`, read: false, createdAt: new Date().toISOString() });
     setSubmitting(false);
@@ -296,7 +309,7 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [expanded, setExpanded] = useState(true);
-  const { startJob, addProgressMedia } = useMechanicStore();
+  const { startJob, addProgressMedia, syncJobsFromBackend } = useMechanicStore();
   const { addNotification } = useNotifStore();
   const statusColor = job.status === "accepted" ? C.blue : C.orange;
 
@@ -305,9 +318,15 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
       { text: "Cancel", style: "cancel" },
       {
         text: "Yes, Start Job",
-        onPress: () => {
-          startJob(job.id);
-          addNotification({ id: `n-mech-start-${Date.now()}`, userId: "mech-demo", type: "job_started", title: "Job Started 🔧", message: `You started the ${job.serviceType.replace(/-/g, " ")} job`, read: false, createdAt: new Date().toISOString() });
+        onPress: async () => {
+          try {
+            await apiStartJob(job.id);
+            startJob(job.id);
+            apiGetMechJobs().then(({ jobs }) => syncJobsFromBackend(jobs)).catch(() => {});
+            addNotification({ id: `n-mech-start-${Date.now()}`, userId: "mech-demo", type: "job_started", title: "Job Started", message: `You started the ${job.serviceType.replace(/-/g, " ")} job`, read: false, createdAt: new Date().toISOString() });
+          } catch (err: any) {
+            Alert.alert("Could Not Start Job", err?.message || "Please check the server and try again.");
+          }
         },
       },
     ]);

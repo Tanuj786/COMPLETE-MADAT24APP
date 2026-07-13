@@ -2,19 +2,28 @@ import React, { useRef, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { formatDistanceToNow } from "date-fns";
 import Icon from "~/lib/icons/Icon";
 import { Card, Badge } from "~/components/ui";
 import { COLORS, FONTS, STATUS_CFG } from "~/constants";
 import { useCustomerStore } from "~/stores";
+import { apiGetMyJobs } from "~/lib/api";
 
 export default function History() {
-  const { jobs } = useCustomerStore();
+  const { jobs, syncJobsFromBackend } = useCustomerStore();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      apiGetMyJobs()
+        .then(({ jobs }) => syncJobsFromBackend(jobs))
+        .catch(() => {});
+    }, [syncJobsFromBackend]),
+  );
 
   const sorted = [...jobs].sort((a, b) =>
     new Date(b.timestamps.requested).getTime() - new Date(a.timestamps.requested).getTime()

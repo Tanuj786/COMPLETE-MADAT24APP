@@ -81,6 +81,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 // ─── CUSTOMER ──────────────────────────────────────────────────────
 interface CustomerStore {
   jobs: CustomerJob[];            // ← CLEAN: starts EMPTY
+  syncJobsFromBackend: (jobs: any[]) => void;
   addJob: (j: CustomerJob) => void;
   updateJobStatus: (id: string, status: CustomerJob["status"]) => void;
   updateJobMechanic: (id: string, mechanic: NonNullable<CustomerJob["mechanic"]>) => void;
@@ -91,8 +92,98 @@ interface CustomerStore {
   payInvoice: (jobId: string, method: string) => void;
   addReview: (jobId: string, rating: number, review: string, tags: string[]) => void;
 }
+
+const mediaFromBackend = (media: any[] | undefined, category: string): MediaItem[] =>
+  (media || [])
+    .filter(m => !category || m.category === category)
+    .map(m => ({
+      id: m.id,
+      type: m.mimeType?.startsWith?.("video/") ? "video" : "photo",
+      uri: m.url || m.uri,
+      uploadedAt: new Date(m.uploadedAt || Date.now()).toISOString(),
+      uploadedBy: m.uploadedBy || "",
+    }));
+
+const parseInvoiceItems = (lineItems: any) => {
+  if (Array.isArray(lineItems)) return lineItems;
+  if (typeof lineItems !== "string") return [];
+  try {
+    const parsed = JSON.parse(lineItems);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const customerJobFromBackend = (job: any): CustomerJob => ({
+  id: job.id,
+  customerId: job.customerId,
+  mechanicId: job.mechanicId || undefined,
+  serviceType: job.serviceType,
+  vehicleInfo: {
+    type: job.vehicleType || "car",
+    make: job.vehicleMake || undefined,
+    model: job.vehicleModel || undefined,
+    year: job.vehicleYear || undefined,
+    licensePlate: job.licensePlate || undefined,
+  },
+  location: {
+    address: job.address || "",
+    city: job.city || "",
+    state: job.state || "",
+    pincode: job.pincode || "",
+    coordinates: { lat: job.latitude || 0, lng: job.longitude || 0 },
+  },
+  description: job.description || undefined,
+  status: job.status,
+  customerMedia: mediaFromBackend(job.media, "customer"),
+  progressMedia: mediaFromBackend(job.media, "progress"),
+  completionMedia: mediaFromBackend(job.media, "completion"),
+  timestamps: {
+    requested: new Date(job.requestedAt || job.createdAt || Date.now()).toISOString(),
+    accepted: job.acceptedAt ? new Date(job.acceptedAt).toISOString() : undefined,
+    started: job.startedAt ? new Date(job.startedAt).toISOString() : undefined,
+    completed: job.completedAt ? new Date(job.completedAt).toISOString() : undefined,
+    cancelled: job.cancelledAt ? new Date(job.cancelledAt).toISOString() : undefined,
+  },
+  mechanic: job.mechanic ? {
+    id: job.mechanic.id,
+    name: job.mechanic.name,
+    shopName: job.mechanic.mechanicProfile?.shopName || `${job.mechanic.name}'s Shop`,
+    phone: job.mechanic.phone,
+    rating: job.mechanic.mechanicProfile?.rating || 0,
+  } : undefined,
+  estimatedArrival: job.estimatedArrival || undefined,
+  invoice: job.invoice ? {
+    id: job.invoice.id,
+    jobId: job.id,
+    invoiceNumber: job.invoice.invoiceNumber,
+    date: new Date(job.invoice.createdAt || Date.now()).toISOString(),
+    shopInfo: {
+      name: job.mechanic?.mechanicProfile?.shopName || job.mechanic?.name || "Mechanic Shop",
+      address: job.mechanic?.mechanicProfile?.address || "",
+      phone: job.mechanic?.phone || "",
+      gstNumber: job.mechanic?.mechanicProfile?.gstNumber || undefined,
+    },
+    customerInfo: { name: job.customer?.name || "", phone: job.customer?.phone || "" },
+    lineItems: parseInvoiceItems(job.invoice.lineItems).map((it: any, i: number) => ({
+      id: String(it.id || i + 1),
+      description: it.description || it.desc || "Service",
+      quantity: Number(it.quantity || it.qty || 1),
+      unitPrice: Number(it.unitPrice || it.price || 0),
+      total: Number(it.total ?? (Number(it.unitPrice || it.price || 0) * Number(it.quantity || it.qty || 1))),
+    })),
+    subtotal: job.invoice.subtotal || 0,
+    tax: job.invoice.tax || 0,
+    total: job.invoice.total || 0,
+    paymentStatus: job.invoice.paymentStatus || "pending",
+    paymentMethod: job.invoice.paymentMethod || undefined,
+  } : undefined,
+});
+
 export const useCustomerStore = create<CustomerStore>(set => ({
   jobs: [],  // ← ZERO on fresh account
+  syncJobsFromBackend: (jobs) => set({ jobs: jobs.map(customerJobFromBackend) }),
   addJob: (j) => set(s => ({ jobs: [j, ...s.jobs] })),
   updateJobStatus: (id, status) =>
     set(s => ({

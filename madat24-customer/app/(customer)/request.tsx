@@ -20,8 +20,8 @@ import * as ImagePicker from "expo-image-picker";
 import Icon from "~/lib/icons/Icon";
 import { FONTS } from "~/constants";
 import { useTheme } from "~/components/ui";
-import { useAuthStore } from "~/stores";
-import { BASE_URL, apiCancelJob, apiCreateJob, apiGetNearbyMechanics } from "~/lib/api";
+import { useAuthStore, useCustomerStore } from "~/stores";
+import { BASE_URL, apiCancelJob, apiCreateJob, apiGetMyJobs, apiGetNearbyMechanics } from "~/lib/api";
 import type { NearbyMechanic } from "~/lib/api";
 import { useSocket } from "~/hooks/useSocket";
 
@@ -326,6 +326,7 @@ function MechanicCard({ mech, delay }: { mech: NearbyMechanic; delay: number }) 
 export default function CustomerRequest() {
   const C = useTheme();
   const { user } = useAuthStore();
+  const { syncJobsFromBackend } = useCustomerStore();
   const params = useLocalSearchParams<{ service?: string }>();
 
   const [step, setStep]         = useState(1);
@@ -440,6 +441,7 @@ export default function CustomerRequest() {
       });
       createdJobId = result?.job?.id ?? null;
       setActiveJobId(createdJobId);
+      apiGetMyJobs().then(({ jobs }) => syncJobsFromBackend(jobs)).catch(() => {});
     } catch (err: any) {
       setSearching(false);
       setStep(3);
@@ -486,6 +488,7 @@ export default function CustomerRequest() {
           try {
             setCancelling(true);
             await apiCancelJob(activeJobId);
+            apiGetMyJobs().then(({ jobs }) => syncJobsFromBackend(jobs)).catch(() => {});
             socket?.off("job_accepted");
             setActiveJobId(null);
             setSubmitted(false);

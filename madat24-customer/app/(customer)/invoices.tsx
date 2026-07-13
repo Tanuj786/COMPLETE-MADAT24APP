@@ -5,12 +5,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "expo-router";
 import { format } from "date-fns";
 import Icon from "~/lib/icons/Icon";
 import { useTheme } from "~/components/ui";
 import { FONTS } from "~/constants";
 import { useCustomerStore, useNotifStore, useAuthStore } from "~/stores";
-import { apiPayCash } from "~/lib/api";
+import { apiGetMyJobs, apiPayCash } from "~/lib/api";
 
 const { width } = Dimensions.get("window");
 
@@ -476,7 +477,7 @@ function SuccessModal({ visible, amount, invoiceNum, method, onClose }: {
 // ════════════════════════════════════════════════════════════════
 export default function Invoices() {
   const C    = useTheme();
-  const { jobs, payInvoice }    = useCustomerStore();
+  const { jobs, payInvoice, syncJobsFromBackend }    = useCustomerStore();
   const { addNotification }      = useNotifStore();
   const { user }                 = useAuthStore();
   const invoiceJobs              = jobs.filter(j => j.invoice);
@@ -489,6 +490,18 @@ export default function Invoices() {
 
   const currentJob  = invoiceJobs.find(j => j.id === payingId);
   const currentInv  = currentJob?.invoice;
+
+  const refreshJobs = React.useCallback(() => {
+    return apiGetMyJobs()
+      .then(({ jobs }) => syncJobsFromBackend(jobs))
+      .catch(() => {});
+  }, [syncJobsFromBackend]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshJobs();
+    }, [refreshJobs]),
+  );
 
   // After QR modal confirms payment
   const handleQrVerify = async () => {
@@ -507,6 +520,7 @@ export default function Invoices() {
       });
     }
     setProcessing(false);
+    refreshJobs();
     setSuccessData({ amount: currentInv.total, invoiceNum: currentInv.invoiceNumber, method: "UPI" });
     setPayingId(null);
   };
@@ -529,6 +543,7 @@ export default function Invoices() {
       });
     }
     setProcessing(false);
+    refreshJobs();
     setSuccessData({ amount: inv.total, invoiceNum: inv.invoiceNumber, method });
     setPayingId(null);
   };

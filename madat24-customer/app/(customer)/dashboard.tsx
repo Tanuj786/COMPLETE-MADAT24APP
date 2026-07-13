@@ -6,7 +6,7 @@ import {
 import QRCode from "react-native-qrcode-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { formatDistanceToNow } from "date-fns";
 import Icon from "~/lib/icons/Icon";
 import { PulseDot, SectionHeader, useTheme } from "~/components/ui";
@@ -19,6 +19,7 @@ import { PhotoStrip, selectAndUploadPhoto } from "~/components/shared/PhotoPicke
 import { showToast } from "~/components/ui/Toast";
 import { AnimatedNumber } from "~/components/ui/AnimatedNumber";
 import { PressableScale } from "~/components/ui/PressableScale";
+import { apiGetMyJobs } from "~/lib/api";
 
 // ── Workflow track ────────────────────────────────────────────────
 const STEPS = [
@@ -746,7 +747,7 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
 export default function CustomerDashboard() {
   const C = useTheme();
   const { user } = useAuthStore();
-  const { jobs } = useCustomerStore();
+  const { jobs, syncJobsFromBackend } = useCustomerStore();
   const { unreadCount } = useNotifStore();
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -760,6 +761,17 @@ export default function CustomerDashboard() {
 
   const { updateJobStatus, updateJobMechanic } = useCustomerStore();
   const active    = jobs.filter(j => ["pending", "accepted", "in-progress"].includes(j.status));
+  const refreshJobs = React.useCallback(() => {
+    return apiGetMyJobs()
+      .then(({ jobs }) => syncJobsFromBackend(jobs))
+      .catch(() => {});
+  }, [syncJobsFromBackend]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshJobs();
+    }, [refreshJobs]),
+  );
 
   const { socket } = useSocket();
   React.useEffect(() => {
@@ -767,24 +779,28 @@ export default function CustomerDashboard() {
     socket.on("job_accepted", ({ jobId, mechanic }: any) => {
       updateJobStatus(jobId, "accepted");
       if (mechanic) updateJobMechanic(jobId, mechanic);
+      refreshJobs();
       showToast(`${mechanic?.name || "A mechanic"} accepted your request`, "success");
     });
     socket.on("job_started", ({ jobId }: any) => {
       updateJobStatus(jobId, "in-progress");
+      refreshJobs();
       showToast("Mechanic started working", "info");
     });
     socket.on("job_completed", ({ jobId }: any) => {
       updateJobStatus(jobId, "completed");
+      refreshJobs();
       showToast("Service complete — invoice ready", "success");
     });
     socket.on("job_cancelled", ({ reason }: any) => {
+      refreshJobs();
       showToast(reason === "expired" ? "Request expired — no mechanic responded" : "Request cancelled", "error");
     });
     return () => {
       socket.off("job_accepted"); socket.off("job_started");
       socket.off("job_completed"); socket.off("job_cancelled");
     };
-  }, [socket]);
+  }, [socket, refreshJobs, updateJobMechanic, updateJobStatus]);
   const completed = jobs.filter(j => j.status === "completed");
   const cancelled = jobs.filter(j => j.status === "cancelled");
   const pendingPay= completed.filter(j => j.invoice?.paymentStatus === "pending");
