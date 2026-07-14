@@ -118,6 +118,9 @@ r.post("/requests/:id/accept", async (req, res) => {
       id: me.id, name: me.name, phone: me.phone,
       shopName: me.mechanicProfile?.shopName || `${me.name}'s Shop`,
       rating: me.mechanicProfile?.rating || 0,
+      coordinates: me.mechanicProfile?.latitude != null && me.mechanicProfile?.longitude != null
+        ? { lat: me.mechanicProfile.latitude, lng: me.mechanicProfile.longitude }
+        : undefined,
     } : null,
   });
   emitToJob(updated!.id, "job_accepted", { jobId: updated!.id });
@@ -260,7 +263,21 @@ r.patch("/location", async (req, res) => {
     where: { userId: req.user!.id },
     data: { latitude, longitude, isOnline: !!isOnline, lastSeenAt: new Date() },
   });
-  // Broadcast to anyone tracking this mechanic
+  const activeJobs = await prisma.job.findMany({
+    where: { mechanicId: req.user!.id, status: { in: ["accepted", "in-progress"] } },
+    select: { id: true, latitude: true, longitude: true },
+  });
+  for (const job of activeJobs) {
+    const distance = Number(haversineKm(latitude, longitude, job.latitude, job.longitude).toFixed(2));
+    emitToJob(job.id, "mechanic_location", {
+      jobId: job.id,
+      mechanicId: req.user!.id,
+      latitude,
+      longitude,
+      distance,
+      eta: `${Math.max(2, Math.round(distance * 4))} min`,
+    });
+  }
   emitToUser(req.user!.id, "mechanic_location", { mechanicId: req.user!.id, latitude, longitude });
   const pendingJobsAlerted = isOnline ? await alertPendingJobsForMechanic(req.user!.id, latitude, longitude) : 0;
   res.json({ ok: true, pendingJobsAlerted });

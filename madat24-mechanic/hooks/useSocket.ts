@@ -138,7 +138,7 @@ export function useSocket() {
 // ── Emit helpers — all null-safe ──────────────────────────────────
 export const joinJobRoom        = (s: any, jobId: string)                    => s?.emit("join_job",        { jobId });
 export const leaveJobRoom       = (s: any, jobId: string)                    => s?.emit("leave_job",       { jobId });
-export const sendLocationUpdate = (s: any, lat: number, lng: number)         => s?.emit("location_update", { latitude: lat, longitude: lng });
+export const sendLocationUpdate = (s: any, lat: number, lng: number, jobIds?: string[]) => s?.emit("location_update", { latitude: lat, longitude: lng, jobIds });
 export const trackMechanic      = (s: any, mechanicId: string)               => s?.emit("track_mechanic",  { mechanicId });
 export const sendTyping         = (s: any, jobId: string, isTyping: boolean) => s?.emit("typing",          { jobId, isTyping });
 

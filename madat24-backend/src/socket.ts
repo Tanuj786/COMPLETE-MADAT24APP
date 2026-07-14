@@ -35,9 +35,13 @@ export function initSocket(server: HttpServer): IOServer {
     socket.on("leave_job", ({ jobId }: { jobId: string }) => {
       if (jobId) socket.leave(`job:${jobId}`);
     });
-    socket.on("location_update", (payload: { latitude: number; longitude: number }) => {
-      // Forward to mechanic-tracking rooms; no DB write here (handled by REST PATCH)
-      socket.to(`mechanic:${user.id}`).emit("mechanic_location", { mechanicId: user.id, ...payload });
+    socket.on("location_update", (payload: { latitude: number; longitude: number; jobId?: string; jobIds?: string[] }) => {
+      // Forward live GPS to active job rooms. DB persistence is handled by REST PATCH /mechanic/location.
+      const jobIds = [payload.jobId, ...(payload.jobIds || [])].filter(Boolean) as string[];
+      for (const jobId of new Set(jobIds)) {
+        socket.to(`job:${jobId}`).emit("mechanic_location", { mechanicId: user.id, jobId, latitude: payload.latitude, longitude: payload.longitude });
+      }
+      socket.to(`mechanic:${user.id}`).emit("mechanic_location", { mechanicId: user.id, latitude: payload.latitude, longitude: payload.longitude });
     });
     socket.on("track_mechanic", ({ mechanicId }: { mechanicId: string }) => {
       if (mechanicId) socket.join(`mechanic:${mechanicId}`);

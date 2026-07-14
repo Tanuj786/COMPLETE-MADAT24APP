@@ -152,6 +152,9 @@ const customerJobFromBackend = (job: any): CustomerJob => ({
     shopName: job.mechanic.mechanicProfile?.shopName || `${job.mechanic.name}'s Shop`,
     phone: job.mechanic.phone,
     rating: job.mechanic.mechanicProfile?.rating || 0,
+    coordinates: job.mechanic.mechanicProfile?.latitude != null && job.mechanic.mechanicProfile?.longitude != null
+      ? { lat: job.mechanic.mechanicProfile.latitude, lng: job.mechanic.mechanicProfile.longitude }
+      : undefined,
   } : undefined,
   estimatedArrival: job.estimatedArrival || undefined,
   invoice: job.invoice ? {

@@ -39,7 +39,7 @@ export interface CustomerJob {
   customerMedia: MediaItem[]; progressMedia?: MediaItem[];
   completionMedia?: MediaItem[];
   timestamps: { requested: string; accepted?: string; started?: string; completed?: string; cancelled?: string };
-  mechanic?: { id: string; name: string; shopName: string; phone: string; rating: number };
+  mechanic?: { id: string; name: string; shopName: string; phone: string; rating: number; coordinates?: { lat: number; lng: number } };
   estimatedArrival?: string; rating?: number; review?: string; invoice?: Invoice;
 }
 

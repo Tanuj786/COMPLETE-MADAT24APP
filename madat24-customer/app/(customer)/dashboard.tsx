@@ -12,7 +12,7 @@ import Icon from "~/lib/icons/Icon";
 import { PulseDot, SectionHeader, useTheme } from "~/components/ui";
 import { FONTS, SERVICES, STATUS_CFG } from "~/constants";
 import { useAuthStore, useCustomerStore, useNotifStore, useChatStore, useMechanicStore } from "~/stores";
-import { useSocket } from "~/hooks/useSocket";
+import { joinJobRoom, leaveJobRoom, useSocket } from "~/hooks/useSocket";
 import type { CustomerJob, MediaItem, ChatMessage } from "~/types";
 import { TrackingMap } from "~/components/shared/TrackingMap";
 import { PhotoStrip, selectAndUploadPhoto } from "~/components/shared/PhotoPicker";
@@ -556,12 +556,36 @@ const EMOJIS: Record<string, string> = {
   "oil-change": "🛢️", "ac-repair": "❄️",
 };
 
+const distanceKm = (a?: { lat: number; lng: number }, b?: { lat: number; lng: number }) => {
+  if (!a || !b) return undefined;
+  const toRad = (n: number) => (n * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return Number((6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))).toFixed(2));
+};
+
+const etaFromDistance = (km?: number) =>
+  typeof km === "number" ? `${Math.max(2, Math.round(km * 4))} min` : undefined;
+
 function ActiveJobCard({ job }: { job: CustomerJob }) {
   const C = useTheme();
   const { user } = useAuthStore();
+  const { socket } = useSocket();
   const cfg = STATUS_CFG[job.status] || STATUS_CFG.pending;
   const [chatOpen, setChatOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [tracking, setTracking] = useState<{
+    coords?: { lat: number; lng: number };
+    distance?: number;
+    eta?: string;
+  }>({
+    coords: job.mechanic?.coordinates,
+    distance: distanceKm(job.mechanic?.coordinates, job.location?.coordinates),
+    eta: job.estimatedArrival || etaFromDistance(distanceKm(job.mechanic?.coordinates, job.location?.coordinates)),
+  });
   const { addCustomerMedia } = useCustomerStore();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim  = useRef(new Animated.Value(0.25)).current;
@@ -579,6 +603,38 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
       ])).start();
     }
   }, [job.status]);
+
+  useEffect(() => {
+    setTracking(prev => ({
+      coords: prev.coords || job.mechanic?.coordinates,
+      distance: prev.distance ?? distanceKm(job.mechanic?.coordinates, job.location?.coordinates),
+      eta: prev.eta || job.estimatedArrival || etaFromDistance(distanceKm(job.mechanic?.coordinates, job.location?.coordinates)),
+    }));
+  }, [job.mechanic?.coordinates?.lat, job.mechanic?.coordinates?.lng, job.estimatedArrival]);
+
+  useEffect(() => {
+    if (!socket || !["accepted", "in-progress"].includes(job.status)) return;
+    joinJobRoom(socket, job.id);
+    const onMechanicLocation = (payload: any) => {
+      if (payload?.jobId && payload.jobId !== job.id) return;
+      if (job.mechanicId && payload?.mechanicId && payload.mechanicId !== job.mechanicId) return;
+      const lat = Number(payload?.latitude);
+      const lng = Number(payload?.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const nextCoords = { lat, lng };
+      const fallbackDistance = distanceKm(nextCoords, job.location?.coordinates);
+      setTracking({
+        coords: nextCoords,
+        distance: typeof payload.distance === "number" ? payload.distance : fallbackDistance,
+        eta: payload.eta || etaFromDistance(fallbackDistance),
+      });
+    };
+    socket.on("mechanic_location", onMechanicLocation);
+    return () => {
+      socket.off("mechanic_location", onMechanicLocation);
+      leaveJobRoom(socket, job.id);
+    };
+  }, [socket, job.id, job.status, job.mechanicId]);
 
   const canChat     = ["accepted", "in-progress"].includes(job.status);
   const canAddPhoto = job.status === "pending";
@@ -631,8 +687,9 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
               mechanicName={job.mechanic?.name ?? "Mechanic"}
               mechanicShop={job.mechanic?.shopName ?? ""}
               customerCoords={job.location?.coordinates ?? undefined}
-              distance={2.4}
-              eta="12 min"
+              mechanicCoords={tracking.coords}
+              distance={tracking.distance}
+              eta={tracking.eta || "Calculating"}
               status={job.status}
               viewerRole="customer"
             />

@@ -160,6 +160,11 @@ export function TrackingMap({
   const mapFade     = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    setLiveEta(eta);
+    setLiveKm(distance);
+  }, [eta, distance]);
+
+  useEffect(() => {
     Animated.stagger(150, [
       Animated.parallel([
         Animated.timing(headerFade,  { toValue: 1, duration: 500, useNativeDriver: true }),
@@ -171,8 +176,8 @@ export function TrackingMap({
       ]),
     ]).start();
 
-    // Simulate live ETA countdown
-    if (status === "accepted") {
+    // Simulate countdown only when no real location feed is available yet.
+    if (status === "accepted" && !mechanicCoords && Number.isFinite(parseInt(eta, 10))) {
       let mins = parseInt(eta);
       const interval = setInterval(() => {
         mins = Math.max(1, mins - 1);

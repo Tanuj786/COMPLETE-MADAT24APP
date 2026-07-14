@@ -21,6 +21,7 @@ export default function MechanicDashboard() {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const { socket } = useSocket();
+  const activeJobIds = activeJobs.map(job => job.id);
 
   const publishCurrentLocation = async (online: boolean) => {
     const ExpoLoc = require("expo-location");
@@ -28,7 +29,7 @@ export default function MechanicDashboard() {
     if (status !== "granted") return null;
     const loc = await ExpoLoc.getCurrentPositionAsync({ accuracy: ExpoLoc.Accuracy.Balanced });
     const { latitude, longitude } = loc.coords;
-    sendLocationUpdate(socket, latitude, longitude);
+    sendLocationUpdate(socket, latitude, longitude, activeJobIds);
     await apiUpdateLocation(latitude, longitude, online);
     return { latitude, longitude };
   };
@@ -82,7 +83,7 @@ export default function MechanicDashboard() {
       } catch {}
     }, 10000); // every 10 seconds
     return () => clearInterval(interval);
-  }, [isOnline, socket, user?.id]);
+  }, [isOnline, socket, user?.id, activeJobIds.join(",")]);
 
   // Top-level socket listeners for cross-screen toasts
   useEffect(() => {
