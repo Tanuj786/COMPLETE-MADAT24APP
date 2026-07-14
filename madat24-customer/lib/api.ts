@@ -47,6 +47,7 @@ async function callBackend<T>(
   path: string,
   options: RequestInit = {},
   requireAuth = true,
+  retries = 0,
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -56,22 +57,37 @@ async function callBackend<T>(
     const token = await getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 25000);
-  let res: Response;
-  try {
-    res = await fetch(`${BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
-  } catch (err: any) {
-    if (err?.name === "AbortError" || err instanceof TypeError) {
-      throw new Error(NO_BACKEND_MSG);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutMs = path.startsWith("/auth/") ? 60000 : 25000;
+    const tid = setTimeout(() => controller.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(`${BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
+    } catch (err: any) {
+      clearTimeout(tid);
+      if (attempt < retries && (err?.name === "AbortError" || err instanceof TypeError)) {
+        await sleep(1200 * (attempt + 1));
+        continue;
+      }
+      if (err?.name === "AbortError" || err instanceof TypeError) {
+        throw new Error(NO_BACKEND_MSG);
+      }
+      throw err;
     }
-    throw err;
-  } finally {
     clearTimeout(tid);
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (attempt < retries && res.status >= 500) {
+        await sleep(1200 * (attempt + 1));
+        continue;
+      }
+      throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+    }
+    return data as T;
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
-  return data as T;
+  throw new Error(NO_BACKEND_MSG);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -80,6 +96,7 @@ async function callBackend<T>(
 // All auth now requires the backend.
 // ═══════════════════════════════════════════════════════════
 const NO_BACKEND_MSG = "Cannot reach the server. Please check your internet connection and try again.";
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 
 // ═══════════════════════════════════════════════════════════
@@ -115,6 +132,7 @@ export async function apiLogin(data: {
     "/auth/login",
     { method: "POST", body: JSON.stringify({ ...data, email: data.email.toLowerCase().trim() }) },
     false,
+    2,
   );
   await saveToken(r.token);
   return r;
