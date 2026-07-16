@@ -1,13 +1,39 @@
 import React from "react";
-import { Tabs, router } from "expo-router";
+import { Tabs, router, useFocusEffect } from "expo-router";
 import { View, Text, Pressable } from "react-native";
 import Icon from "~/lib/icons/Icon";
 import { COLORS, FONTS } from "~/constants";
 import { useNotifStore, useMechanicStore } from "~/stores";
+import { apiGetMechJobs, apiGetMechProfile, apiGetPendingRequests } from "~/lib/api";
 
 export default function MechanicLayout() {
   const { unreadCount } = useNotifStore();
-  const { requests, activeJobs } = useMechanicStore();
+  const { requests, activeJobs, addIncomingRequest, setMetrics, setShopProfile, syncJobsFromBackend } = useMechanicStore();
+
+  const refreshMechanicState = React.useCallback(() => {
+    apiGetMechJobs()
+      .then(({ jobs }) => syncJobsFromBackend(jobs))
+      .catch(() => {});
+    apiGetPendingRequests()
+      .then(({ requests }) => requests.forEach((req: any) => addIncomingRequest(req)))
+      .catch(() => {});
+    apiGetMechProfile()
+      .then(({ profile, metrics }) => {
+        if (profile) setShopProfile(profile);
+        if (metrics) setMetrics(metrics);
+      })
+      .catch(() => {});
+  }, [addIncomingRequest, setMetrics, setShopProfile, syncJobsFromBackend]);
+
+  React.useEffect(() => {
+    refreshMechanicState();
+  }, [refreshMechanicState]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshMechanicState();
+    }, [refreshMechanicState]),
+  );
 
   const TAB_BAR_STYLE = {
     backgroundColor: "#080818",

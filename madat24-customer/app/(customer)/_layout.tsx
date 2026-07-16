@@ -1,11 +1,29 @@
 import React from "react";
-import { Tabs } from "expo-router";
+import { Tabs, useFocusEffect } from "expo-router";
 import Icon from "~/lib/icons/Icon";
 import { COLORS, FONTS } from "~/constants";
-import { useNotifStore } from "~/stores";
+import { useCustomerStore, useNotifStore } from "~/stores";
+import { apiGetMyJobs } from "~/lib/api";
 
 export default function CustomerLayout() {
   const { unreadCount } = useNotifStore();
+  const { syncJobsFromBackend } = useCustomerStore();
+
+  const refreshCustomerJobs = React.useCallback(() => {
+    apiGetMyJobs()
+      .then(({ jobs }) => syncJobsFromBackend(jobs))
+      .catch(() => {});
+  }, [syncJobsFromBackend]);
+
+  React.useEffect(() => {
+    refreshCustomerJobs();
+  }, [refreshCustomerJobs]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshCustomerJobs();
+    }, [refreshCustomerJobs]),
+  );
 
   return (
     <Tabs screenOptions={{

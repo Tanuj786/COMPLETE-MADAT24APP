@@ -2,13 +2,13 @@ import React, { useRef, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import Icon from "~/lib/icons/Icon";
 import { ProgressBar, PulseDot, useTheme } from "~/components/ui";
 import { FONTS } from "~/constants";
 import { useAuthStore, useMechanicStore, useNearbyStore } from "~/stores";
 import { useSocket, sendLocationUpdate } from "~/hooks/useSocket";
-import { apiToggleOnline, apiUpdateLocation } from "~/lib/api";
+import { apiGetMechJobs, apiGetMechProfile, apiGetPendingRequests, apiToggleOnline, apiUpdateLocation } from "~/lib/api";
 import { showToast } from "~/components/ui/Toast";
 import { AnimatedNumber } from "~/components/ui/AnimatedNumber";
 import { PressableScale } from "~/components/ui/PressableScale";
@@ -16,12 +16,36 @@ import { PressableScale } from "~/components/ui/PressableScale";
 export default function MechanicDashboard() {
   const C = useTheme();
   const { user } = useAuthStore();
-  const { isOnline, toggleOnline, metrics, requests, activeJobs, shopProfile } = useMechanicStore();
+  const {
+    isOnline, toggleOnline, metrics, requests, activeJobs, shopProfile,
+    addIncomingRequest, setMetrics, setShopProfile, syncJobsFromBackend,
+  } = useMechanicStore();
   const { registerMechanic, updateMechanicOnline } = useNearbyStore();
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const { socket } = useSocket();
   const activeJobIds = activeJobs.map(job => job.id);
+
+  const refreshMechanicState = React.useCallback(() => {
+    apiGetMechJobs()
+      .then(({ jobs }) => syncJobsFromBackend(jobs))
+      .catch(() => {});
+    apiGetPendingRequests()
+      .then(({ requests }) => requests.forEach((req: any) => addIncomingRequest(req)))
+      .catch(() => {});
+    apiGetMechProfile()
+      .then(({ profile, metrics }) => {
+        if (profile) setShopProfile(profile);
+        if (metrics) setMetrics(metrics);
+      })
+      .catch(() => {});
+  }, [addIncomingRequest, setMetrics, setShopProfile, syncJobsFromBackend]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshMechanicState();
+    }, [refreshMechanicState]),
+  );
 
   const publishCurrentLocation = async (online: boolean) => {
     const ExpoLoc = require("expo-location");
