@@ -588,6 +588,7 @@ export default function ActiveJobs() {
   const C = useTheme();
   const { activeJobs, completedJobs, syncJobsFromBackend } = useMechanicStore();
   const [tab, setTab] = useState<"active" | "completed">("active");
+  const [completedChatJob, setCompletedChatJob] = useState<ActiveJob | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -650,16 +651,28 @@ export default function ActiveJobs() {
                   <Text style={{ color: C.text1, fontFamily: FONTS.semibold, fontSize: 14, textTransform: "capitalize" }}>{job.serviceType.replace(/-/g, " ")}</Text>
                   <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 12 }}>{job.customer?.name}</Text>
                 </View>
-                <View>
+                <View style={{ alignItems: "flex-end", gap: 8 }}>
                   <Text style={{ color: C.green, fontFamily: FONTS.black, fontSize: 15 }}>₹{job.invoice?.total.toFixed(0) || "—"}</Text>
                   <Text style={{ color: job.invoice?.paymentStatus === "paid" ? C.green : C.yellow, fontFamily: FONTS.semibold, fontSize: 10, textAlign: "right" }}>
                     {job.invoice?.paymentStatus === "paid" ? "PAID" : "PENDING"}
                   </Text>
+                  <Pressable onPress={() => setCompletedChatJob(job)} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.primaryDim, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+                    <Icon name="MessageSquare" size={12} color={C.primary} />
+                    <Text style={{ color: C.primary, fontFamily: FONTS.semibold, fontSize: 11 }}>Chat</Text>
+                  </Pressable>
                 </View>
               </View>
             ))}
           </ScrollView>
         )
+      )}
+      {completedChatJob && (
+        <ChatModal
+          visible={!!completedChatJob}
+          jobId={completedChatJob.id}
+          customerName={completedChatJob.customer?.name || "Customer"}
+          onClose={() => setCompletedChatJob(null)}
+        />
       )}
     </SafeAreaView>
   );

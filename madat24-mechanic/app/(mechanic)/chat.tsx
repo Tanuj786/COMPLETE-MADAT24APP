@@ -27,18 +27,19 @@ function normalizeChatMessage(raw: any, fallbackJobId: string): ChatMessage {
 export default function MechanicChat() {
   const { messages, sendMessage, upsertMessage, setMessages } = useChatStore();
   const { user } = useAuthStore();
-  const { activeJobs } = useMechanicStore();
+  const { activeJobs, completedJobs } = useMechanicStore();
   const { socket } = useSocket();
   const [text, setText] = useState("");
   const scrollRef = useRef<ScrollView>(null);
 
-  // Use first active job or "default"
-  const jobId = activeJobs[0]?.id || "default";
+  const selectedJob = activeJobs[0] || completedJobs[0];
+  const jobId = selectedJob?.id || "default";
   const chatMsgs = messages[jobId] || messages["default"] || [];
-  const customerName = activeJobs[0]?.customer?.name || "Customer";
+  const customerName = selectedJob?.customer?.name || "Customer";
+  const isCompleted = !!selectedJob && completedJobs.some(job => job.id === selectedJob.id);
 
   useEffect(() => {
-    if (!activeJobs[0]?.id) return;
+    if (!selectedJob?.id) return;
     let cancelled = false;
 
     apiGetMessages(jobId)
@@ -69,7 +70,7 @@ export default function MechanicChat() {
     return () => {
       cancelled = true;
     };
-  }, [activeJobs, jobId, socket, setMessages, upsertMessage]);
+  }, [selectedJob?.id, jobId, socket, setMessages, upsertMessage]);
 
   const handleSend = async () => {
     const body = text.trim();
@@ -108,13 +109,13 @@ export default function MechanicChat() {
     ]);
   };
 
-  if (activeJobs.length === 0) return (
+  if (!selectedJob) return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
         <Text style={{ fontSize: 60, marginBottom: 16 }}>💬</Text>
-        <Text style={{ color: COLORS.text2, fontFamily: FONTS.bold, fontSize: 18, marginBottom: 8 }}>No Active Chats</Text>
+        <Text style={{ color: COLORS.text2, fontFamily: FONTS.bold, fontSize: 18, marginBottom: 8 }}>No Chats Yet</Text>
         <Text style={{ color: COLORS.text3, fontFamily: FONTS.regular, fontSize: 14, textAlign: "center", lineHeight: 22 }}>
-          Chat becomes available once you accept a job request
+          Chat becomes available once you accept a job request.
         </Text>
       </View>
     </SafeAreaView>
@@ -130,13 +131,13 @@ export default function MechanicChat() {
         <View style={{ flex: 1 }}>
           <Text style={{ color: COLORS.text1, fontFamily: FONTS.bold, fontSize: 16 }}>{customerName}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.green }} />
-            <Text style={{ color: COLORS.green, fontFamily: FONTS.regular, fontSize: 12 }}>Online</Text>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isCompleted ? COLORS.text3 : COLORS.green }} />
+            <Text style={{ color: isCompleted ? COLORS.text3 : COLORS.green, fontFamily: FONTS.regular, fontSize: 12 }}>{isCompleted ? "Completed job" : "Online"}</Text>
           </View>
         </View>
         <View style={{ backgroundColor: COLORS.orangeDim, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
           <Text style={{ color: COLORS.orange, fontFamily: FONTS.semibold, fontSize: 11 }}>
-            {activeJobs[0]?.serviceType?.replace(/-/g, " ") || "Service"}
+            {selectedJob?.serviceType?.replace(/-/g, " ") || "Service"}
           </Text>
         </View>
       </LinearGradient>
@@ -189,7 +190,7 @@ export default function MechanicChat() {
           </Pressable>
           <TextInput
             value={text} onChangeText={setText}
-            placeholder="Message customer..."
+            placeholder={isCompleted ? "Message about this completed job..." : "Message customer..."}
             placeholderTextColor={COLORS.text3}
             multiline
             style={{ flex: 1, backgroundColor: COLORS.bg1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11, color: COLORS.text1, fontFamily: FONTS.regular, fontSize: 14, borderWidth: 1, borderColor: COLORS.border, maxHeight: 100 }}
