@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   View, Text, ScrollView, Pressable, TextInput,
   Alert, Modal, Image, Platform, Animated,
@@ -15,7 +15,8 @@ import { PhotoStrip, selectAndUploadPhoto } from "~/components/shared/PhotoPicke
 import type { Invoice, MediaItem, ChatMessage } from "~/types";
 import { formatDistanceToNow } from "date-fns";
 import { useFocusEffect } from "expo-router";
-import { apiArriveJob, apiCompleteJob, apiGetMechJobs, apiStartJob } from "~/lib/api";
+import { apiArriveJob, apiCompleteJob, apiGetMechJobs, apiGetMessages, apiSendMessage, apiStartJob } from "~/lib/api";
+import { joinJobRoom, leaveJobRoom, useSocket } from "~/hooks/useSocket";
 
 // ── Photo fullscreen ──────────────────────────────────────────────
 function PhotoFull({ uri, onClose }: { uri: string; onClose: () => void }) {
@@ -83,29 +84,81 @@ function MediaStrip({ photos, label, onAdd, readonly = false, jobId, category = 
 }
 
 // ── Chat modal ────────────────────────────────────────────────────
+function normalizeChatMessage(raw: any, fallbackJobId: string): ChatMessage {
+  return {
+    id: String(raw?.id || `msg-${Date.now()}`),
+    jobId: String(raw?.jobId || fallbackJobId),
+    senderId: String(raw?.senderId || ""),
+    senderName: String(raw?.senderName || (raw?.senderRole === "mechanic" ? "Mechanic" : "Customer")),
+    senderRole: raw?.senderRole === "mechanic" ? "mechanic" : "customer",
+    text: raw?.text || "",
+    imageUri: raw?.imageUri || raw?.imageUrl,
+    createdAt: raw?.createdAt || new Date().toISOString(),
+    read: Boolean(raw?.read),
+  };
+}
+
 function ChatModal({ visible, jobId, customerName, onClose }: { visible: boolean; jobId: string; customerName: string; onClose: () => void }) {
   const C = useTheme();
-  const { messages, sendMessage, setMessages } = useChatStore();
-  const { user } = useAuthStore();
+  const { messages, upsertMessage, setMessages } = useChatStore();
+  const { socket } = useSocket();
   const [text, setText] = useState("");
   const scroll = useRef<ScrollView>(null);
   const msgs = messages[jobId] || [];
 
-  React.useEffect(() => {
-    if (visible && msgs.length === 0) {
-      setMessages(jobId, [
-        { id: `c0`, jobId, senderId: "customer-demo", senderName: customerName, senderRole: "customer", text: "Hi! I'm at the location waiting.", createdAt: new Date(Date.now() - 400000).toISOString(), read: true },
-        { id: `c1`, jobId, senderId: "mech-demo", senderName: user?.name || "Mechanic", senderRole: "mechanic", text: "On my way! Can you share photos of the issue?", createdAt: new Date(Date.now() - 300000).toISOString(), read: true },
-      ]);
-    }
-    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 200);
-  }, [visible]);
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
 
-  const handleSend = () => {
-    if (!text.trim()) return;
-    sendMessage(jobId, { id: `m-${Date.now()}`, jobId, senderId: "mech-demo", senderName: user?.name || "Mechanic", senderRole: "mechanic", text: text.trim(), createdAt: new Date().toISOString(), read: false });
+    apiGetMessages(jobId)
+      .then(({ messages: serverMessages }) => {
+        if (!cancelled) {
+          setMessages(jobId, serverMessages.map(m => normalizeChatMessage(m, jobId)));
+        }
+      })
+      .catch(() => {
+        if (!cancelled && (messages[jobId] || []).length === 0) {
+          setMessages(jobId, []);
+        }
+      });
+
+    if (socket) {
+      joinJobRoom(socket, jobId);
+      const onNewMessage = (payload: any) => {
+        const msg = normalizeChatMessage(payload, jobId);
+        if (msg.jobId === jobId) {
+          upsertMessage(jobId, msg);
+          setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
+        }
+      };
+      socket.on("new_message", onNewMessage);
+      return () => {
+        cancelled = true;
+        socket.off("new_message", onNewMessage);
+        leaveJobRoom(socket, jobId);
+      };
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, jobId, socket, setMessages, upsertMessage]);
+
+  useEffect(() => {
+    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 200);
+  }, [visible, msgs.length]);
+
+  const handleSend = async () => {
+    const body = text.trim();
+    if (!body) return;
     setText("");
-    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
+    try {
+      const { message } = await apiSendMessage(jobId, body);
+      upsertMessage(jobId, normalizeChatMessage(message, jobId));
+      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e: any) {
+      Alert.alert("Chat error", e?.message || "Could not send message. Please try again.");
+    }
   };
 
   return (

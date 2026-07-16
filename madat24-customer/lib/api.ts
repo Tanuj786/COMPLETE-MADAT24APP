@@ -286,7 +286,7 @@ export const apiPayCash = (jobId: string, method = "CASH") =>
 // ═══════════════════════════════════════════════════════════
 export const apiGetMessages = (jobId: string) => callBackend<{ messages: any[] }>(`/chat/${jobId}`);
 export const apiSendMessage = (jobId: string, text: string) =>
-  callBackend(`/chat/${jobId}`, { method: "POST", body: JSON.stringify({ text }) });
+  callBackend<{ message: any }>(`/chat/${jobId}`, { method: "POST", body: JSON.stringify({ text }) });
 
 export async function apiSendChatImage(jobId: string, imageUri: string) {
   const form = new FormData();

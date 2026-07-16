@@ -472,12 +472,19 @@ export const useNotifStore = create<NotifStore>(set => ({
 interface ChatStore {
   messages: Record<string, ChatMessage[]>;
   sendMessage: (jobId: string, msg: ChatMessage) => void;
+  upsertMessage: (jobId: string, msg: ChatMessage) => void;
   setMessages: (jobId: string, msgs: ChatMessage[]) => void;
 }
 export const useChatStore = create<ChatStore>(set => ({
   messages: {},   // ← ZERO
   sendMessage: (jobId, msg) =>
     set(s => ({ messages: { ...s.messages, [jobId]: [...(s.messages[jobId] || []), msg] } })),
+  upsertMessage: (jobId, msg) =>
+    set(s => {
+      const existing = s.messages[jobId] || [];
+      if (existing.some(m => m.id === msg.id)) return s;
+      return { messages: { ...s.messages, [jobId]: [...existing, msg] } };
+    }),
   setMessages: (jobId, msgs) =>
     set(s => ({ messages: { ...s.messages, [jobId]: msgs } })),
 }));

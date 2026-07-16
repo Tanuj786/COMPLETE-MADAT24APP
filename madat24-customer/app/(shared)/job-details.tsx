@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Animated } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Animated, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -7,7 +7,10 @@ import { formatDistanceToNow } from "date-fns";
 import Icon from "~/lib/icons/Icon";
 import { Card, Badge, GradientBtn, PulseDot, JobTimeline } from "~/components/ui";
 import { COLORS, FONTS, STATUS_CFG } from "~/constants";
-import { useCustomerStore, useChatStore, useAuthStore } from "~/stores";
+import { useCustomerStore, useChatStore } from "~/stores";
+import { apiGetMessages, apiSendMessage } from "~/lib/api";
+import { joinJobRoom, leaveJobRoom, useSocket } from "~/hooks/useSocket";
+import type { ChatMessage } from "~/types";
 
 const STEPS = [
   { key: "pending",     label: "Request Sent",   tsKey: "requested" },
@@ -16,11 +19,25 @@ const STEPS = [
   { key: "completed",   label: "Job Completed",     tsKey: "completed" },
 ];
 
+function normalizeChatMessage(raw: any, fallbackJobId: string): ChatMessage {
+  return {
+    id: String(raw?.id || `msg-${Date.now()}`),
+    jobId: String(raw?.jobId || fallbackJobId),
+    senderId: String(raw?.senderId || ""),
+    senderName: String(raw?.senderName || (raw?.senderRole === "mechanic" ? "Mechanic" : "Customer")),
+    senderRole: raw?.senderRole === "mechanic" ? "mechanic" : "customer",
+    text: raw?.text || "",
+    imageUri: raw?.imageUri || raw?.imageUrl,
+    createdAt: raw?.createdAt || new Date().toISOString(),
+    read: Boolean(raw?.read),
+  };
+}
+
 export default function JobDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { jobs, cancelJob } = useCustomerStore();
-  const { messages, sendMessage } = useChatStore();
-  const { user } = useAuthStore();
+  const { messages, upsertMessage, setMessages } = useChatStore();
+  const { socket } = useSocket();
   const job = jobs.find(j => j.id === id) || jobs[0];
   const [showChat, setShowChat] = useState(false);
   const [chatText, setChatText] = useState("");
@@ -45,6 +62,40 @@ export default function JobDetails() {
   const chatMsgs = messages[id || "default"] || messages["default"] || [];
   const canChat = ["accepted","in-progress","completed"].includes(job.status);
 
+  useEffect(() => {
+    if (!showChat || !id || id === "default") return;
+    let cancelled = false;
+
+    apiGetMessages(id)
+      .then(({ messages: serverMessages }) => {
+        if (!cancelled) {
+          setMessages(id, serverMessages.map(m => normalizeChatMessage(m, id)));
+        }
+      })
+      .catch(() => {});
+
+    if (socket) {
+      joinJobRoom(socket, id);
+      const onNewMessage = (payload: any) => {
+        const msg = normalizeChatMessage(payload, id);
+        if (msg.jobId === id) {
+          upsertMessage(id, msg);
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      };
+      socket.on("new_message", onNewMessage);
+      return () => {
+        cancelled = true;
+        socket.off("new_message", onNewMessage);
+        leaveJobRoom(socket, id);
+      };
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showChat, id, socket, setMessages, upsertMessage]);
+
   const timelineSteps = STEPS.map((step, i) => {
     const tsKey = step.tsKey as keyof typeof job.timestamps;
     const ts = job.timestamps[tsKey];
@@ -61,16 +112,17 @@ export default function JobDetails() {
     };
   });
 
-  const handleSend = () => {
-    if (!chatText.trim()) return;
-    sendMessage(id || "default", {
-      id: `msg-${Date.now()}`, jobId: id || "default",
-      senderId: user?.id || "customer-demo", senderName: user?.name || "You",
-      senderRole: "customer", text: chatText.trim(),
-      createdAt: new Date().toISOString(), read: false,
-    });
+  const handleSend = async () => {
+    const body = chatText.trim();
+    if (!body || !id) return;
     setChatText("");
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    try {
+      const { message } = await apiSendMessage(id, body);
+      upsertMessage(id, normalizeChatMessage(message, id));
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e: any) {
+      Alert.alert("Chat error", e?.message || "Could not send message. Please try again.");
+    }
   };
 
   return (

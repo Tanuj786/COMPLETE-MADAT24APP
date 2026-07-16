@@ -19,7 +19,7 @@ import { PhotoStrip, selectAndUploadPhoto } from "~/components/shared/PhotoPicke
 import { showToast } from "~/components/ui/Toast";
 import { AnimatedNumber } from "~/components/ui/AnimatedNumber";
 import { PressableScale } from "~/components/ui/PressableScale";
-import { apiGetMyJobs } from "~/lib/api";
+import { apiGetMessages, apiGetMyJobs, apiSendMessage } from "~/lib/api";
 
 // ── Workflow track ────────────────────────────────────────────────
 const STEPS = [
@@ -99,28 +99,81 @@ function ServiceLifecycleTrack({ job }: { job: CustomerJob }) {
   );
 }
 
+function normalizeChatMessage(raw: any, fallbackJobId: string): ChatMessage {
+  return {
+    id: String(raw?.id || `msg-${Date.now()}`),
+    jobId: String(raw?.jobId || fallbackJobId),
+    senderId: String(raw?.senderId || ""),
+    senderName: String(raw?.senderName || (raw?.senderRole === "mechanic" ? "Mechanic" : "Customer")),
+    senderRole: raw?.senderRole === "mechanic" ? "mechanic" : "customer",
+    text: raw?.text || "",
+    imageUri: raw?.imageUri || raw?.imageUrl,
+    createdAt: raw?.createdAt || new Date().toISOString(),
+    read: Boolean(raw?.read),
+  };
+}
+
 function ChatModal({ visible, jobId, mechanicName, onClose }: { visible: boolean; jobId: string; mechanicName: string; onClose: () => void }) {
   const C = useTheme();
-  const { messages, sendMessage, setMessages } = useChatStore();
-  const { user } = useAuthStore();
+  const { messages, upsertMessage, setMessages } = useChatStore();
+  const { socket } = useSocket();
   const [text, setText] = useState("");
   const scroll = useRef<ScrollView>(null);
   const msgs = messages[jobId] || [];
 
   useEffect(() => {
-    if (visible && msgs.length === 0) {
-      setMessages(jobId, [
-        { id: "c1", jobId, senderId: "mech", senderName: mechanicName, senderRole: "mechanic", text: "Hello! I've accepted your request. On my way, will be there in ~15 minutes.", createdAt: new Date(Date.now() - 300000).toISOString(), read: true },
-      ]);
-    }
-    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 200);
-  }, [visible]);
+    if (!visible) return;
+    let cancelled = false;
 
-  const send = () => {
-    if (!text.trim()) return;
-    sendMessage(jobId, { id: `m-${Date.now()}`, jobId, senderId: user?.id || "cust", senderName: user?.name || "You", senderRole: "customer", text: text.trim(), createdAt: new Date().toISOString(), read: false });
+    apiGetMessages(jobId)
+      .then(({ messages: serverMessages }) => {
+        if (!cancelled) {
+          setMessages(jobId, serverMessages.map(m => normalizeChatMessage(m, jobId)));
+        }
+      })
+      .catch(() => {
+        if (!cancelled && (messages[jobId] || []).length === 0) {
+          setMessages(jobId, []);
+        }
+      });
+
+    if (socket) {
+      joinJobRoom(socket, jobId);
+      const onNewMessage = (payload: any) => {
+        const msg = normalizeChatMessage(payload, jobId);
+        if (msg.jobId === jobId) {
+          upsertMessage(jobId, msg);
+          setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
+        }
+      };
+      socket.on("new_message", onNewMessage);
+      return () => {
+        cancelled = true;
+        socket.off("new_message", onNewMessage);
+        leaveJobRoom(socket, jobId);
+      };
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, jobId, socket, setMessages, upsertMessage]);
+
+  useEffect(() => {
+    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 200);
+  }, [visible, msgs.length]);
+
+  const send = async () => {
+    const body = text.trim();
+    if (!body) return;
     setText("");
-    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
+    try {
+      const { message } = await apiSendMessage(jobId, body);
+      upsertMessage(jobId, normalizeChatMessage(message, jobId));
+      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e: any) {
+      Alert.alert("Chat error", e?.message || "Could not send message. Please try again.");
+    }
   };
 
   return (

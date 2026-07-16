@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,11 +6,29 @@ import { formatDistanceToNow } from "date-fns";
 import Icon from "~/lib/icons/Icon";
 import { COLORS, FONTS } from "~/constants";
 import { useChatStore, useAuthStore, useMechanicStore } from "~/stores";
+import { apiGetMessages, apiSendMessage } from "~/lib/api";
+import { joinJobRoom, leaveJobRoom, useSocket } from "~/hooks/useSocket";
+import type { ChatMessage } from "~/types";
+
+function normalizeChatMessage(raw: any, fallbackJobId: string): ChatMessage {
+  return {
+    id: String(raw?.id || `msg-${Date.now()}`),
+    jobId: String(raw?.jobId || fallbackJobId),
+    senderId: String(raw?.senderId || ""),
+    senderName: String(raw?.senderName || (raw?.senderRole === "mechanic" ? "Mechanic" : "Customer")),
+    senderRole: raw?.senderRole === "mechanic" ? "mechanic" : "customer",
+    text: raw?.text || "",
+    imageUri: raw?.imageUri || raw?.imageUrl,
+    createdAt: raw?.createdAt || new Date().toISOString(),
+    read: Boolean(raw?.read),
+  };
+}
 
 export default function MechanicChat() {
-  const { messages, sendMessage } = useChatStore();
+  const { messages, sendMessage, upsertMessage, setMessages } = useChatStore();
   const { user } = useAuthStore();
   const { activeJobs } = useMechanicStore();
+  const { socket } = useSocket();
   const [text, setText] = useState("");
   const scrollRef = useRef<ScrollView>(null);
 
@@ -19,16 +37,61 @@ export default function MechanicChat() {
   const chatMsgs = messages[jobId] || messages["default"] || [];
   const customerName = activeJobs[0]?.customer?.name || "Customer";
 
-  const handleSend = () => {
-    if (!text.trim()) return;
-    sendMessage(jobId, {
-      id: `msg-${Date.now()}`, jobId,
-      senderId: user?.id || "mech-demo", senderName: user?.name || "You",
-      senderRole: "mechanic", text: text.trim(),
-      createdAt: new Date().toISOString(), read: false,
-    });
+  useEffect(() => {
+    if (!activeJobs[0]?.id) return;
+    let cancelled = false;
+
+    apiGetMessages(jobId)
+      .then(({ messages: serverMessages }) => {
+        if (!cancelled) {
+          setMessages(jobId, serverMessages.map(m => normalizeChatMessage(m, jobId)));
+        }
+      })
+      .catch(() => {});
+
+    if (socket) {
+      joinJobRoom(socket, jobId);
+      const onNewMessage = (payload: any) => {
+        const msg = normalizeChatMessage(payload, jobId);
+        if (msg.jobId === jobId) {
+          upsertMessage(jobId, msg);
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      };
+      socket.on("new_message", onNewMessage);
+      return () => {
+        cancelled = true;
+        socket.off("new_message", onNewMessage);
+        leaveJobRoom(socket, jobId);
+      };
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeJobs, jobId, socket, setMessages, upsertMessage]);
+
+  const handleSend = async () => {
+    const body = text.trim();
+    if (!body) return;
     setText("");
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    if (jobId === "default") {
+      sendMessage(jobId, {
+        id: `msg-${Date.now()}`, jobId,
+        senderId: user?.id || "mech-demo", senderName: user?.name || "You",
+        senderRole: "mechanic", text: body,
+        createdAt: new Date().toISOString(), read: false,
+      });
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      return;
+    }
+    try {
+      const { message } = await apiSendMessage(jobId, body);
+      upsertMessage(jobId, normalizeChatMessage(message, jobId));
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e: any) {
+      Alert.alert("Chat error", e?.message || "Could not send message. Please try again.");
+    }
   };
 
   const handleImage = () => {
