@@ -154,12 +154,13 @@ function ChatModal({ visible, jobId, customerName, onClose }: { visible: boolean
 // ── Invoice builder modal ─────────────────────────────────────────
 function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: ActiveJob; onClose: () => void }) {
   const C = useTheme();
-  const [items, setItems] = useState([{ desc: "", qty: "1", price: "" }]);
+  const [items, setItems] = useState([{ desc: "", qty: "1", price: "", kind: "service" as "service" | "part" | "labour" }]);
+  const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { completeJob, shopProfile, addCompletionMedia, syncJobsFromBackend } = useMechanicStore();
   const { addNotification } = useNotifStore();
 
-  const addItem = () => setItems(p => [...p, { desc: "", qty: "1", price: "" }]);
+  const addItem = () => setItems(p => [...p, { desc: "", qty: "1", price: "", kind: "service" }]);
   const removeItem = (i: number) => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i: number, field: string, val: string) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [field]: val } : it));
 
@@ -178,8 +179,9 @@ function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: Active
       invoiceNumber: invNum, date: new Date().toISOString(),
       shopInfo: { name: shopProfile?.shopName || "Mechanic Shop", address: `${shopProfile?.location?.address || ""}, ${shopProfile?.location?.city || ""}`, phone: job.customer?.phone || "", gstNumber: shopProfile?.gstNumber },
       customerInfo: { name: job.customer?.name || "", phone: job.customer?.phone || "" },
-      lineItems: valid.map((it, i) => ({ id: String(i + 1), description: it.desc, quantity: parseInt(it.qty) || 1, unitPrice: parseFloat(it.price) || 0, total: (parseFloat(it.price) || 0) * (parseInt(it.qty) || 1) })),
+      lineItems: valid.map((it, i) => ({ id: String(i + 1), description: it.desc, quantity: parseInt(it.qty) || 1, unitPrice: parseFloat(it.price) || 0, total: (parseFloat(it.price) || 0) * (parseInt(it.qty) || 1), kind: it.kind })),
       subtotal, tax, total, paymentStatus: "pending",
+      notes: notes.trim() || undefined,
     };
     try {
       await apiCompleteJob(job.id, invoice.lineItems.map(it => ({
@@ -187,7 +189,8 @@ function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: Active
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         total: it.total,
-      })));
+        kind: it.kind,
+      })), notes.trim());
       apiGetMechJobs().then(({ jobs }) => syncJobsFromBackend(jobs)).catch(() => {});
     } catch (err: any) {
       setSubmitting(false);
@@ -216,17 +219,22 @@ function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: Active
         </View>
 
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+          <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: C.cardBorder }}>
+            <Text style={{ color: C.text1, fontFamily: FONTS.bold, fontSize: 15, marginBottom: 12 }}>Before-Work Photos</Text>
+            <PhotoStrip photos={job.customerMedia} label="Customer uploaded before-work proof" readonly />
+          </View>
+
           {/* After-service photos */}
           <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: C.cardBorder }}>
-            <Text style={{ color: C.text1, fontFamily: FONTS.bold, fontSize: 15, marginBottom: 12 }}>After-Service Photos</Text>
+            <Text style={{ color: C.text1, fontFamily: FONTS.bold, fontSize: 15, marginBottom: 12 }}>After-Work Proof</Text>
             <PhotoStrip
               photos={job.completionMedia}
-              label="After-service photos"
+              label="Photos/videos after repair"
               jobId={job.id}
               category="completion"
               onAdd={(localUri, remoteUrl) => {
                 addCompletionMedia(job.id, {
-                  id: `cm-${Date.now()}`, type: "photo",
+                  id: `cm-${Date.now()}`, type: /\.(mp4|mov|m4v|webm)$/i.test((remoteUrl || localUri).split("?")[0] || "") ? "video" : "photo",
                   uri: remoteUrl || localUri,
                   uploadedAt: new Date().toISOString(), uploadedBy: "mechanic",
                 });
@@ -247,6 +255,13 @@ function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: Active
                 )}
               </View>
               <TextInput value={item.desc} onChangeText={v => updateItem(i, "desc", v)} placeholder="Description (e.g. Tyre replacement)" placeholderTextColor={C.text3} style={{ backgroundColor: C.bg, borderRadius: 10, borderWidth: 1.5, borderColor: C.border, color: C.text1, fontFamily: FONTS.regular, fontSize: 14, paddingVertical: 11, paddingHorizontal: 13, marginBottom: 8 }} />
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+                {(["service", "part", "labour"] as const).map(kind => (
+                  <Pressable key={kind} onPress={() => updateItem(i, "kind", kind)} style={{ flex: 1, borderRadius: 10, paddingVertical: 9, alignItems: "center", backgroundColor: item.kind === kind ? C.primaryDim : C.bg, borderWidth: 1, borderColor: item.kind === kind ? C.primary : C.border }}>
+                    <Text style={{ color: item.kind === kind ? C.primary : C.text3, fontFamily: FONTS.bold, fontSize: 11, textTransform: "capitalize" }}>{kind}</Text>
+                  </Pressable>
+                ))}
+              </View>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: C.text3, fontFamily: FONTS.medium, fontSize: 10, marginBottom: 4 }}>QTY</Text>
@@ -270,6 +285,19 @@ function InvoiceModal({ visible, job, onClose }: { visible: boolean; job: Active
             <Icon name="Plus" size={18} color={C.primary} />
             <Text style={{ color: C.primary, fontFamily: FONTS.semibold, fontSize: 14 }}>Add Another Item</Text>
           </Pressable>
+
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ color: C.text1, fontFamily: FONTS.bold, fontSize: 15, marginBottom: 8 }}>Repair Notes</Text>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Add work done, parts replaced, warranty or advice for the customer..."
+              placeholderTextColor={C.text3}
+              multiline
+              numberOfLines={4}
+              style={{ backgroundColor: C.card, borderRadius: 14, borderWidth: 1.5, borderColor: C.cardBorder, color: C.text1, fontFamily: FONTS.regular, fontSize: 14, padding: 14, minHeight: 96, textAlignVertical: "top" }}
+            />
+          </View>
 
           {/* Totals */}
           <LinearGradient colors={[C.isDark ? "#0D1A12" : "#F0FFF8", C.isDark ? "#0A1520" : "#E8F8F0"]} style={{ borderRadius: 18, padding: 18, borderWidth: 1, borderColor: C.green + "30" }}>

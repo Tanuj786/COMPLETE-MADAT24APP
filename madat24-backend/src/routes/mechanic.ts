@@ -225,7 +225,8 @@ r.patch("/jobs/:id/complete", async (req, res) => {
   if (job.mechanicId !== req.user!.id) return res.status(403).json({ error: "Not your job" });
   if (job.status !== "in-progress") return res.status(400).json({ error: `Cannot complete a ${job.status} job` });
 
-  const lineItems: Array<{ description: string; quantity: number; unitPrice: number; total: number }> = Array.isArray(req.body?.lineItems) ? req.body.lineItems : [];
+  const lineItems: Array<{ description: string; quantity: number; unitPrice: number; total: number; kind?: string }> = Array.isArray(req.body?.lineItems) ? req.body.lineItems : [];
+  const notes = String(req.body?.notes || "").trim();
   if (!lineItems.length) return res.status(400).json({ error: "At least one invoice line item is required." });
 
   const subtotal = lineItems.reduce((s, it) => s + (Number(it.unitPrice) || 0) * (Number(it.quantity) || 1), 0);
@@ -241,7 +242,7 @@ r.patch("/jobs/:id/complete", async (req, res) => {
       data: {
         jobId: job.id,
         invoiceNumber: `INV-${String(Date.now()).slice(-6)}`,
-        lineItems: JSON.stringify(lineItems),
+        lineItems: JSON.stringify({ items: lineItems, notes }),
         subtotal, tax, total,
         paymentStatus: "pending",
       },

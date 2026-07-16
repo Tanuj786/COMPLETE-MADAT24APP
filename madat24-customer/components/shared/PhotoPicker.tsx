@@ -22,6 +22,8 @@ import { FONTS } from "~/constants";
 import { useTheme } from "~/components/ui";
 import { apiUploadMedia, getToken } from "~/lib/api";
 
+const isVideoUri = (uri: string) => /\.(mp4|mov|m4v|webm)$/i.test(uri.split("?")[0] || "");
+
 // ── Action Sheet (iOS native; Android uses Alert directly in selectAndUploadPhoto) ──
 async function showPickerOptions(): Promise<"camera" | "gallery" | null> {
   return new Promise((resolve) => {
@@ -56,7 +58,7 @@ export async function pickPhoto(source: "camera" | "gallery"): Promise<string | 
         return null;
       }
       result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.8,
         allowsEditing: true,
         aspect: [4, 3],
@@ -72,7 +74,7 @@ export async function pickPhoto(source: "camera" | "gallery"): Promise<string | 
         return null;
       }
       result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.8,
         allowsMultipleSelection: false,
         allowsEditing: true,
@@ -131,7 +133,7 @@ export async function selectAndUploadPhoto(opts: {
     try {
       const token = await getToken();
       if (token) {
-        const result = await apiUploadMedia(jobId, uri, category);
+        const result = await apiUploadMedia(jobId, uri, category, isVideoUri(uri) ? "video/mp4" : "image/jpeg");
         // Update with final Cloudinary URL
         onPicked(uri, result.media.url);
       }
@@ -220,7 +222,14 @@ export function PhotoStrip({
           <View style={{ flexDirection: "row", gap: 8 }}>
             {photos.map((p, i) => (
               <Pressable key={i} onPress={() => setPreview(p.uri)}>
-                <Image source={{ uri: p.uri }} style={{ width: 88, height: 88, borderRadius: 12, borderWidth: 1.5, borderColor: C.border }} />
+                {p.type === "video" || isVideoUri(p.uri) ? (
+                  <View style={{ width: 88, height: 88, borderRadius: 12, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.bg2, alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="Play" size={24} color={C.primary} />
+                    <Text style={{ color: C.text3, fontFamily: FONTS.medium, fontSize: 10, marginTop: 4 }}>Video</Text>
+                  </View>
+                ) : (
+                  <Image source={{ uri: p.uri }} style={{ width: 88, height: 88, borderRadius: 12, borderWidth: 1.5, borderColor: C.border }} />
+                )}
                 <View style={{ position: "absolute", bottom: 4, right: 4, backgroundColor: "#000A", borderRadius: 6, padding: 3 }}>
                   <Icon name="ZoomIn" size={10} color="white" />
                 </View>
@@ -254,3 +263,4 @@ export function PhotoStrip({
     </View>
   );
 }
+

@@ -109,9 +109,20 @@ const parseInvoiceItems = (lineItems: any) => {
   if (typeof lineItems !== "string") return [];
   try {
     const parsed = JSON.parse(lineItems);
-    return Array.isArray(parsed) ? parsed : [];
+    if (Array.isArray(parsed)) return parsed;
+    return Array.isArray(parsed?.items) ? parsed.items : [];
   } catch {
     return [];
+  }
+};
+
+const parseInvoiceNotes = (lineItems: any) => {
+  if (typeof lineItems !== "string") return "";
+  try {
+    const parsed = JSON.parse(lineItems);
+    return typeof parsed?.notes === "string" ? parsed.notes : "";
+  } catch {
+    return "";
   }
 };
 
@@ -178,12 +189,14 @@ const customerJobFromBackend = (job: any): CustomerJob => ({
       quantity: Number(it.quantity || it.qty || 1),
       unitPrice: Number(it.unitPrice || it.price || 0),
       total: Number(it.total ?? (Number(it.unitPrice || it.price || 0) * Number(it.quantity || it.qty || 1))),
+      kind: it.kind || "service",
     })),
     subtotal: job.invoice.subtotal || 0,
     tax: job.invoice.tax || 0,
     total: job.invoice.total || 0,
     paymentStatus: job.invoice.paymentStatus || "pending",
     paymentMethod: job.invoice.paymentMethod || undefined,
+    notes: parseInvoiceNotes(job.invoice.lineItems) || undefined,
   } : undefined,
 });
 

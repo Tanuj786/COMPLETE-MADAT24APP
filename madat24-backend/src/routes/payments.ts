@@ -19,6 +19,19 @@ const emitPaymentCompleted = (job: { id: string; customerId: string; mechanicId:
   if (job.mechanicId) emitToUser(job.mechanicId, "payment_received", payload);
 };
 
+const parseInvoicePayload = (lineItems: string) => {
+  try {
+    const parsed = JSON.parse(lineItems || "[]");
+    if (Array.isArray(parsed)) return { items: parsed, notes: "" };
+    return {
+      items: Array.isArray(parsed?.items) ? parsed.items : [],
+      notes: typeof parsed?.notes === "string" ? parsed.notes : "",
+    };
+  } catch {
+    return { items: [], notes: "" };
+  }
+};
+
 // ─── GET /api/payments/invoice/:jobId ───────────────────────────────
 r.get("/invoice/:jobId", requireAuth, async (req, res) => {
   const job = await prisma.job.findUnique({
@@ -31,6 +44,7 @@ r.get("/invoice/:jobId", requireAuth, async (req, res) => {
   }
   const inv = job.invoice;
   const mp = job.mechanic?.mechanicProfile;
+  const payload = parseInvoicePayload(inv.lineItems);
   const invoice = {
     id: inv.id,
     jobId: inv.jobId,
@@ -44,7 +58,8 @@ r.get("/invoice/:jobId", requireAuth, async (req, res) => {
       upiId: (mp as any)?.upiId || null,
     },
     customerInfo: { name: job.customer?.name || "", phone: job.customer?.phone || "" },
-    lineItems: JSON.parse(inv.lineItems || "[]"),
+    lineItems: payload.items,
+    notes: payload.notes,
     subtotal: inv.subtotal,
     tax: inv.tax,
     total: inv.total,

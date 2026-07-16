@@ -253,8 +253,8 @@ export const apiAcceptRequest  = (jobId: string) => callBackend(`/mechanic/reque
 export const apiRejectRequest  = (jobId: string) => callBackend(`/mechanic/requests/${jobId}/reject`, { method: "POST" });
 export const apiArriveJob      = (jobId: string) => callBackend(`/mechanic/jobs/${jobId}/arrive`, { method: "PATCH" });
 export const apiStartJob       = (jobId: string) => callBackend(`/mechanic/jobs/${jobId}/start`, { method: "PATCH" });
-export const apiCompleteJob    = (jobId: string, items: any[]) =>
-  callBackend(`/mechanic/jobs/${jobId}/complete`, { method: "PATCH", body: JSON.stringify({ lineItems: items }) });
+export const apiCompleteJob    = (jobId: string, items: any[], notes = "") =>
+  callBackend(`/mechanic/jobs/${jobId}/complete`, { method: "PATCH", body: JSON.stringify({ lineItems: items, notes }) });
 export const apiGetMechJobs    = () => callBackend<{ jobs: any[] }>("/mechanic/jobs");
 export const apiUpdateLocation = (lat: number, lng: number, online: boolean) =>
   callBackend("/mechanic/location", { method: "PATCH", body: JSON.stringify({ latitude: lat, longitude: lng, isOnline: online }) });

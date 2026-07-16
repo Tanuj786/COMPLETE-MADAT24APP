@@ -157,6 +157,21 @@ const mediaFromBackend = (media: any[] | undefined, category: string): MediaItem
       uploadedBy: m.uploadedBy || "",
     }));
 
+const parseInvoicePayload = (lineItems: any) => {
+  if (Array.isArray(lineItems)) return { items: lineItems, notes: "" };
+  if (typeof lineItems !== "string") return { items: [], notes: "" };
+  try {
+    const parsed = JSON.parse(lineItems);
+    if (Array.isArray(parsed)) return { items: parsed, notes: "" };
+    return {
+      items: Array.isArray(parsed?.items) ? parsed.items : [],
+      notes: typeof parsed?.notes === "string" ? parsed.notes : "",
+    };
+  } catch {
+    return { items: [], notes: "" };
+  }
+};
+
 const activeJobFromBackend = (job: any): ActiveJob => ({
   id: job.id,
   serviceType: job.serviceType,
@@ -179,20 +194,31 @@ const activeJobFromBackend = (job: any): ActiveJob => ({
   completionMedia: mediaFromBackend(job.media, "completion"),
   reviewMedia: mediaFromBackend(job.media, "review"),
   invoice: job.invoice
-    ? {
+    ? (() => {
+        const payload = parseInvoicePayload(job.invoice.lineItems);
+        return {
         id: job.invoice.id,
         jobId: job.id,
         invoiceNumber: job.invoice.invoiceNumber,
         date: new Date(job.invoice.createdAt || Date.now()).toISOString(),
         shopInfo: { name: "Mechanic Shop", address: "", phone: "" },
         customerInfo: { name: job.customer?.name || "", phone: job.customer?.phone || "" },
-        lineItems: [],
+        lineItems: payload.items.map((it: any, i: number) => ({
+          id: String(it.id || i + 1),
+          description: it.description || it.desc || "Service",
+          quantity: Number(it.quantity || it.qty || 1),
+          unitPrice: Number(it.unitPrice || it.price || 0),
+          total: Number(it.total ?? (Number(it.unitPrice || it.price || 0) * Number(it.quantity || it.qty || 1))),
+          kind: it.kind || "service",
+        })),
         subtotal: job.invoice.subtotal || 0,
         tax: job.invoice.tax || 0,
         total: job.invoice.total || 0,
         paymentStatus: job.invoice.paymentStatus || "pending",
         paymentMethod: job.invoice.paymentMethod || undefined,
-      }
+        notes: payload.notes || undefined,
+      };
+    })()
     : undefined,
 });
 

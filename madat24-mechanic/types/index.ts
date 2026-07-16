@@ -20,7 +20,7 @@ export interface VehicleInfo {
   type: VehicleType; make?: string; model?: string; year?: string; licensePlate?: string;
 }
 
-export interface InvoiceLineItem { id: string; description: string; quantity: number; unitPrice: number; total: number; }
+export interface InvoiceLineItem { id: string; description: string; quantity: number; unitPrice: number; total: number; kind?: "part"|"labour"|"service"; }
 
 export interface Invoice {
   id: string; jobId: string; invoiceNumber: string; date: string;
@@ -29,7 +29,7 @@ export interface Invoice {
   lineItems: InvoiceLineItem[];
   subtotal: number; tax: number; total: number;
   paymentStatus: "pending"|"paid"|"failed";
-  paymentMethod?: string;
+  paymentMethod?: string; notes?: string;
 }
 
 export interface CustomerJob {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, ScrollView, Pressable, Alert, Animated,
-  Modal, ActivityIndicator, Dimensions, Linking,
+  Modal, ActivityIndicator, Dimensions, Linking, Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -12,8 +12,31 @@ import { useTheme } from "~/components/ui";
 import { FONTS } from "~/constants";
 import { useCustomerStore, useNotifStore, useAuthStore } from "~/stores";
 import { apiGetMyJobs, apiPayCash } from "~/lib/api";
+import { PhotoStrip } from "~/components/shared/PhotoPicker";
 
 const { width } = Dimensions.get("window");
+
+function buildInvoiceReceipt(job: any) {
+  const inv = job.invoice;
+  const lines = (inv.lineItems || []).map((it: any) =>
+    `- [${it.kind || "service"}] ${it.description} x${it.quantity} @ ₹${it.unitPrice.toFixed(2)} = ₹${it.total.toFixed(2)}`
+  ).join("\n");
+  return [
+    `MADAT24 INVOICE ${inv.invoiceNumber}`,
+    `Date: ${format(new Date(inv.date), "dd MMM yyyy, hh:mm a")}`,
+    `Customer: ${inv.customerInfo?.name || ""}`,
+    `Mechanic: ${inv.shopInfo?.name || job.mechanic?.shopName || ""}`,
+    "",
+    "Service Breakdown:",
+    lines,
+    "",
+    `Subtotal: ₹${inv.subtotal.toFixed(2)}`,
+    `GST 18%: ₹${inv.tax.toFixed(2)}`,
+    `Total: ₹${inv.total.toFixed(2)}`,
+    `Payment: ${inv.paymentStatus}${inv.paymentMethod ? ` via ${inv.paymentMethod}` : ""}`,
+    inv.notes ? `\nRepair Notes:\n${inv.notes}` : "",
+  ].filter(Boolean).join("\n");
+}
 
 // ── UPI Deep-link builder ─────────────────────────────────────────
 // This creates real UPI payment links that open the user's UPI app
@@ -636,11 +659,31 @@ export default function Invoices() {
                   <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: i < inv.lineItems.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: C.text1, fontFamily: FONTS.medium, fontSize: 13 }}>{item.description}</Text>
+                      <Text style={{ color: C.primary, fontFamily: FONTS.bold, fontSize: 10, marginTop: 2 }}>{(item.kind || "service").toUpperCase()}</Text>
                       <Text style={{ color: C.text3, fontFamily: FONTS.regular, fontSize: 11 }}>Qty {item.quantity} × ₹{item.unitPrice.toFixed(2)}</Text>
                     </View>
                     <Text style={{ color: C.text1, fontFamily: FONTS.bold, fontSize: 13 }}>₹{item.total.toFixed(2)}</Text>
                   </View>
                 ))}
+
+                {!!inv.notes && (
+                  <View style={{ backgroundColor: C.bg1, borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: C.border }}>
+                    <Text style={{ color: C.text2, fontFamily: FONTS.bold, fontSize: 12, marginBottom: 5 }}>Repair Notes</Text>
+                    <Text style={{ color: C.text2, fontFamily: FONTS.regular, fontSize: 12, lineHeight: 18 }}>{inv.notes}</Text>
+                  </View>
+                )}
+
+                {(job.customerMedia.length > 0 || (job.completionMedia || []).length > 0) && (
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={{ color: C.text2, fontFamily: FONTS.bold, fontSize: 13, marginBottom: 10 }}>Service Proof</Text>
+                    {job.customerMedia.length > 0 && (
+                      <PhotoStrip photos={job.customerMedia} label="Before-work photos" readonly />
+                    )}
+                    {(job.completionMedia || []).length > 0 && (
+                      <PhotoStrip photos={job.completionMedia || []} label="After-work photos/videos" readonly />
+                    )}
+                  </View>
+                )}
 
                 {/* Totals */}
                 <View style={{ backgroundColor: C.bg1, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border, marginTop: 12, marginBottom: !paid ? 14 : 0 }}>
@@ -664,6 +707,18 @@ export default function Invoices() {
                     </View>
                   )}
                 </View>
+
+                {paid && (
+                  <Pressable
+                    onPress={() => Share.share({ title: inv.invoiceNumber, message: buildInvoiceReceipt(job) })}
+                    style={{ marginTop: 14, borderRadius: 14, overflow: "hidden" }}
+                  >
+                    <LinearGradient colors={[C.green, C.greenDark]} style={{ paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
+                      <Icon name="Download" size={17} color="white" />
+                      <Text style={{ color: "white", fontFamily: FONTS.black, fontSize: 14 }}>Download / Share Invoice</Text>
+                    </LinearGradient>
+                  </Pressable>
+                )}
 
                 {/* Pay section */}
                 {!paid && (
