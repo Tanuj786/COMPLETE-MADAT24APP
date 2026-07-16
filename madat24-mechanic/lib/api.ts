@@ -252,6 +252,7 @@ export const apiTapToPay = (jobId: string, method = "UPI") =>
 export const apiAcceptRequest  = (jobId: string) => callBackend<{ job: any }>(`/mechanic/requests/${jobId}/accept`, { method: "POST" });
 export const apiRejectRequest  = (jobId: string) => callBackend(`/mechanic/requests/${jobId}/reject`, { method: "POST" });
 export const apiGetPendingRequests = () => callBackend<{ requests: any[] }>("/mechanic/requests");
+export const apiArriveJob      = (jobId: string) => callBackend(`/mechanic/jobs/${jobId}/arrive`, { method: "PATCH" });
 export const apiStartJob       = (jobId: string) => callBackend(`/mechanic/jobs/${jobId}/start`, { method: "PATCH" });
 export const apiCompleteJob    = (jobId: string, items: any[]) =>
   callBackend(`/mechanic/jobs/${jobId}/complete`, { method: "PATCH", body: JSON.stringify({ lineItems: items }) });

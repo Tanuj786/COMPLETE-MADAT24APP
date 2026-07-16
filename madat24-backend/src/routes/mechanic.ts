@@ -159,12 +159,41 @@ r.post("/requests/:id/reject", async (req, res) => {
   res.json({ ok: true });
 });
 
+r.patch("/jobs/:id/arrive", async (req, res) => {
+  const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  if (job.mechanicId !== req.user!.id) return res.status(403).json({ error: "Not your job" });
+  if (job.status !== "accepted") return res.status(400).json({ error: `Cannot mark a ${job.status} job arrived` });
+
+  const updated = await prisma.job.update({
+    where: { id: job.id },
+    data: { status: "arrived" },
+  });
+  emitToUser(job.customerId, "job_arrived", { jobId: job.id });
+  emitToJob(job.id, "job_arrived", { jobId: job.id });
+  await prisma.notification.create({
+    data: {
+      userId: job.customerId,
+      type: "job_arrived",
+      title: "Mechanic Arrived",
+      message: "Your mechanic has reached your location.",
+      data: JSON.stringify({ jobId: job.id }),
+    },
+  });
+  sendPushToUser(job.customerId, {
+    title: "Mechanic Arrived",
+    body: "Your mechanic has reached your location.",
+    data: { jobId: job.id, type: "job_arrived" },
+  });
+  res.json({ job: updated });
+});
+
 // ─── PATCH /api/mechanic/jobs/:id/start ─────────────────────────────
 r.patch("/jobs/:id/start", async (req, res) => {
   const job = await prisma.job.findUnique({ where: { id: req.params.id } });
   if (!job) return res.status(404).json({ error: "Job not found" });
   if (job.mechanicId !== req.user!.id) return res.status(403).json({ error: "Not your job" });
-  if (job.status !== "accepted") return res.status(400).json({ error: `Cannot start a ${job.status} job` });
+  if (!["accepted", "arrived"].includes(job.status)) return res.status(400).json({ error: `Cannot start a ${job.status} job` });
 
   const updated = await prisma.job.update({
     where: { id: job.id },
@@ -264,7 +293,7 @@ r.patch("/location", async (req, res) => {
     data: { latitude, longitude, isOnline: !!isOnline, lastSeenAt: new Date() },
   });
   const activeJobs = await prisma.job.findMany({
-    where: { mechanicId: req.user!.id, status: { in: ["accepted", "in-progress"] } },
+    where: { mechanicId: req.user!.id, status: { in: ["accepted", "arrived", "in-progress"] } },
     select: { id: true, latitude: true, longitude: true },
   });
   for (const job of activeJobs) {

@@ -133,12 +133,12 @@ export const useCustomerStore = create<CustomerStore>(set => ({
 
 // ─── MECHANIC ──────────────────────────────────────────────────────
 export type ActiveJob = {
-  id: string; serviceType: string; status: "accepted" | "in-progress";
+  id: string; serviceType: string; status: "accepted" | "arrived" | "in-progress";
   location?: { address: string; city: string };
   customer?: { id: string; name: string; phone: string };
   vehicleInfo?: { type: string; make?: string; model?: string };
   description?: string;
-  timestamps?: { requested?: string; accepted?: string; started?: string };
+  timestamps?: { requested?: string; accepted?: string; arrived?: string; started?: string };
   customerMedia: MediaItem[];
   progressMedia: MediaItem[];
   completionMedia: MediaItem[];
@@ -159,7 +159,7 @@ const mediaFromBackend = (media: any[] | undefined, category: string): MediaItem
 const activeJobFromBackend = (job: any): ActiveJob => ({
   id: job.id,
   serviceType: job.serviceType,
-  status: job.status === "in-progress" ? "in-progress" : "accepted",
+  status: job.status === "arrived" ? "arrived" : job.status === "in-progress" ? "in-progress" : "accepted",
   location: { address: job.address || "", city: job.city || "" },
   customer: job.customer ? { id: job.customer.id, name: job.customer.name, phone: job.customer.phone } : undefined,
   vehicleInfo: {
@@ -239,7 +239,7 @@ export const useMechanicStore = create<MechanicStore>((set, get) => ({
   syncJobsFromBackend: (jobs) =>
     set(s => {
       const active = jobs
-        .filter(j => j.status === "accepted" || j.status === "in-progress")
+        .filter(j => j.status === "accepted" || j.status === "arrived" || j.status === "in-progress")
         .map(activeJobFromBackend);
       const completed = jobs
         .filter(j => j.status === "completed")

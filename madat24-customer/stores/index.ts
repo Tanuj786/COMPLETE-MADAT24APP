@@ -157,6 +157,8 @@ const customerJobFromBackend = (job: any): CustomerJob => ({
       : undefined,
   } : undefined,
   estimatedArrival: job.estimatedArrival || undefined,
+  rating: job.review?.rating || undefined,
+  review: job.review?.review || undefined,
   invoice: job.invoice ? {
     id: job.invoice.id,
     jobId: job.id,
@@ -194,6 +196,7 @@ export const useCustomerStore = create<CustomerStore>(set => ({
         if (j.id !== id) return j;
         const ts = { ...j.timestamps };
         if (status === "accepted")    ts.accepted  = new Date().toISOString();
+        if (status === "arrived")     ts.arrived   = new Date().toISOString();
         if (status === "in-progress") ts.started   = new Date().toISOString();
         if (status === "completed")   ts.completed = new Date().toISOString();
         if (status === "cancelled")   ts.cancelled = new Date().toISOString();
@@ -228,12 +231,12 @@ export const useCustomerStore = create<CustomerStore>(set => ({
 
 // ─── MECHANIC ──────────────────────────────────────────────────────
 export type ActiveJob = {
-  id: string; serviceType: string; status: "accepted" | "in-progress";
+  id: string; serviceType: string; status: "accepted" | "arrived" | "in-progress";
   location?: { address: string; city: string };
   customer?: { id: string; name: string; phone: string };
   vehicleInfo?: { type: string; make?: string; model?: string };
   description?: string;
-  timestamps?: { requested?: string; accepted?: string; started?: string };
+  timestamps?: { requested?: string; accepted?: string; arrived?: string; started?: string };
   customerMedia: MediaItem[];
   progressMedia: MediaItem[];
   completionMedia: MediaItem[];

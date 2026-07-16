@@ -98,6 +98,7 @@ export const VEHICLES = [
 export const STATUS_CFG: Record<string, { color: string; bg: string; label: string; glow: string }> = {
   pending:       { color: "#FFD93D", bg: "#FFD93D15", label: "Pending",     glow: "#FFD93D30" },
   accepted:      { color: "#3B82F6", bg: "#3B82F615", label: "Accepted",    glow: "#3B82F630" },
+  arrived:       { color: "#14B8A6", bg: "#14B8A615", label: "Arrived",     glow: "#14B8A630" },
   "in-progress": { color: "#FF8C42", bg: "#FF8C4215", label: "In Progress", glow: "#FF8C4230" },
   completed:     { color: "#2ECC71", bg: "#2ECC7115", label: "Completed",   glow: "#2ECC7130" },
   cancelled:     { color: "#FF4757", bg: "#FF475715", label: "Cancelled",   glow: "#FF475730" },

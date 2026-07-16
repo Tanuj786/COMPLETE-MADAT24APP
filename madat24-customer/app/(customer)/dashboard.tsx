@@ -67,6 +67,38 @@ function WorkflowTrack({ status }: { status: string }) {
 
 
 // ── Chat modal ────────────────────────────────────────────────────
+function ServiceLifecycleTrack({ job }: { job: CustomerJob }) {
+  const C = useTheme();
+  const statusIndex = ["pending", "accepted", "arrived", "in-progress", "completed"].indexOf(job.status);
+  const paid = job.invoice?.paymentStatus === "paid";
+  const steps = [
+    { id: "accepted", label: "Accepted", icon: "CheckCircle", done: statusIndex >= 1, active: job.status === "accepted" },
+    { id: "assigned", label: "Assigned", icon: "UserCheck", done: !!job.mechanic, active: job.status === "accepted" && !!job.mechanic },
+    { id: "en-route", label: "En route", icon: "Navigation", done: statusIndex >= 1, active: job.status === "accepted" },
+    { id: "arrived", label: "Arrived", icon: "MapPinCheck", done: statusIndex >= 2, active: job.status === "arrived" },
+    { id: "working", label: "Working", icon: "Wrench", done: statusIndex >= 3, active: job.status === "in-progress" },
+    { id: "invoice", label: "Invoice", icon: "FileText", done: !!job.invoice, active: job.status === "completed" && !job.invoice },
+    { id: "paid", label: "Paid", icon: "IndianRupee", done: paid, active: !!job.invoice && !paid },
+    { id: "review", label: "Review", icon: "Star", done: !!job.rating, active: paid && !job.rating },
+  ];
+
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {steps.map(step => {
+        const col = step.done ? C.green : step.active ? C.primary : C.text3;
+        return (
+          <View key={step.id} style={{ width: "23%", minWidth: 68, alignItems: "center", gap: 6 }}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: step.done ? C.greenDim : step.active ? C.primaryDim : C.bg2, borderWidth: step.active ? 2 : 1, borderColor: col, alignItems: "center", justifyContent: "center" }}>
+              {step.done ? <Icon name="Check" size={15} color={C.green} /> : <Icon name={step.icon as any} size={15} color={col} />}
+            </View>
+            <Text style={{ color: step.done ? C.green : step.active ? col : C.text3, fontFamily: step.active || step.done ? FONTS.bold : FONTS.regular, fontSize: 9, textAlign: "center" }} numberOfLines={1}>{step.label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function ChatModal({ visible, jobId, mechanicName, onClose }: { visible: boolean; jobId: string; mechanicName: string; onClose: () => void }) {
   const C = useTheme();
   const { messages, sendMessage, setMessages } = useChatStore();
@@ -577,6 +609,7 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
   const cfg = STATUS_CFG[job.status] || STATUS_CFG.pending;
   const [chatOpen, setChatOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [tracking, setTracking] = useState<{
     coords?: { lat: number; lng: number };
     distance?: number;
@@ -591,7 +624,7 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
   const glowAnim  = useRef(new Animated.Value(0.25)).current;
 
   useEffect(() => {
-    if (["pending", "in-progress"].includes(job.status)) {
+    if (["pending", "accepted", "arrived", "in-progress"].includes(job.status)) {
       Animated.loop(Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.02, duration: 1500, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
@@ -613,7 +646,7 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
   }, [job.mechanic?.coordinates?.lat, job.mechanic?.coordinates?.lng, job.estimatedArrival]);
 
   useEffect(() => {
-    if (!socket || !["accepted", "in-progress"].includes(job.status)) return;
+    if (!socket || !["accepted", "arrived", "in-progress"].includes(job.status)) return;
     joinJobRoom(socket, job.id);
     const onMechanicLocation = (payload: any) => {
       if (payload?.jobId && payload.jobId !== job.id) return;
@@ -636,10 +669,11 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
     };
   }, [socket, job.id, job.status, job.mechanicId]);
 
-  const canChat     = ["accepted", "in-progress"].includes(job.status);
+  const canChat     = ["accepted", "arrived", "in-progress"].includes(job.status);
   const canAddPhoto = job.status === "pending";
   const showPay     = job.status === "completed" && job.invoice?.paymentStatus === "pending";
   const isPaid      = job.invoice?.paymentStatus === "paid";
+  const showReview  = isPaid && !job.rating;
 
   return (
     <Animated.View style={{ transform: [{ scale: pulseAnim }], marginBottom: 16, shadowColor: cfg.glow || cfg.color, shadowOffset: { width: 0, height: 8 }, shadowOpacity: glowAnim as any, shadowRadius: 22, elevation: 8 }}>
@@ -676,12 +710,12 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
               <Icon name="GitBranch" size={12} color={C.text3} />
               <Text style={{ color: C.text3, fontFamily: FONTS.semibold, fontSize: 10, letterSpacing: 0.8 }}>JOB WORKFLOW</Text>
             </View>
-            <WorkflowTrack status={job.status} />
+            <ServiceLifecycleTrack job={job} />
           </View>
 
           {/* Mechanic info */}
           {/* Live tracking map — shown when mechanic is on the way or working */}
-          {["accepted", "in-progress"].includes(job.status) && !!job.mechanic && (
+          {["accepted", "arrived", "in-progress"].includes(job.status) && !!job.mechanic && (
             <TrackingMap
               customerName={user?.name ?? "You"}
               mechanicName={job.mechanic?.name ?? "Mechanic"}
@@ -695,7 +729,7 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
             />
           )}
 
-          {job.mechanic && ["accepted", "in-progress", "completed"].includes(job.status) && (
+          {job.mechanic && ["accepted", "arrived", "in-progress", "completed"].includes(job.status) && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.bg1, borderRadius: 14, padding: 13, marginBottom: 12, borderWidth: 1, borderColor: C.border }}>
               <LinearGradient colors={[C.primary, C.primaryDark]} style={{ width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
                 <Icon name="User" size={20} color="white" />
@@ -734,6 +768,12 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.primaryDim, borderRadius: 12, padding: 11, marginBottom: 12, borderWidth: 1, borderColor: C.primary + "30" }}>
               <Icon name="Navigation" size={14} color={C.primary} />
               <Text style={{ color: C.primary, fontFamily: FONTS.medium, fontSize: 13 }}>Mechanic on the way — ETA {job.estimatedArrival}</Text>
+            </View>
+          )}
+          {job.status === "arrived" && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.greenDim, borderRadius: 12, padding: 11, marginBottom: 12, borderWidth: 1, borderColor: C.green + "30" }}>
+              <Icon name="MapPinCheck" size={14} color={C.green} />
+              <Text style={{ color: C.green, fontFamily: FONTS.medium, fontSize: 13, flex: 1 }}>Mechanic has arrived at your location</Text>
             </View>
           )}
           {job.status === "in-progress" && (
@@ -789,6 +829,14 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
               </Text>
             </View>
           )}
+          {showReview && (
+            <PressableScale haptic="light" onPress={() => setReviewOpen(true)} style={{ borderRadius: 14, overflow: "hidden", marginTop: 10 }}>
+              <LinearGradient colors={[C.yellow, "#D97706"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
+                <Icon name="Star" size={17} color="white" />
+                <Text style={{ color: "white", fontFamily: FONTS.black, fontSize: 14 }}>Rate & Review Service</Text>
+              </LinearGradient>
+            </PressableScale>
+          )}
         </View>
       </View>
 
@@ -796,6 +844,7 @@ function ActiveJobCard({ job }: { job: CustomerJob }) {
         <ChatModal visible={chatOpen} jobId={job.id} mechanicName={job.mechanic.name} onClose={() => setChatOpen(false)} />
       )}
       <PaymentModal visible={payOpen} job={job} onClose={() => setPayOpen(false)} />
+      <ReviewModal visible={reviewOpen} jobId={job.id} mechanicName={job.mechanic?.name || "Mechanic"} onClose={() => setReviewOpen(false)} />
     </Animated.View>
   );
 }
@@ -817,7 +866,10 @@ export default function CustomerDashboard() {
   }, []);
 
   const { updateJobStatus, updateJobMechanic } = useCustomerStore();
-  const active    = jobs.filter(j => ["pending", "accepted", "in-progress"].includes(j.status));
+  const active    = jobs.filter(j =>
+    ["pending", "accepted", "arrived", "in-progress"].includes(j.status)
+    || (j.status === "completed" && (!!j.invoice && (j.invoice.paymentStatus !== "paid" || !j.rating)))
+  );
   const refreshJobs = React.useCallback(() => {
     return apiGetMyJobs()
       .then(({ jobs }) => syncJobsFromBackend(jobs))
@@ -844,18 +896,31 @@ export default function CustomerDashboard() {
       refreshJobs();
       showToast("Mechanic started working", "info");
     });
+    socket.on("job_arrived", ({ jobId }: any) => {
+      updateJobStatus(jobId, "arrived");
+      refreshJobs();
+      showToast("Mechanic arrived at your location", "success");
+    });
     socket.on("job_completed", ({ jobId }: any) => {
       updateJobStatus(jobId, "completed");
       refreshJobs();
       showToast("Service complete — invoice ready", "success");
+    });
+    socket.on("payment_completed", () => {
+      refreshJobs();
+      showToast("Payment completed", "success");
+    });
+    socket.on("review_submitted", () => {
+      refreshJobs();
+      showToast("Review submitted", "success");
     });
     socket.on("job_cancelled", ({ reason }: any) => {
       refreshJobs();
       showToast(reason === "expired" ? "Request expired — no mechanic responded" : "Request cancelled", "error");
     });
     return () => {
-      socket.off("job_accepted"); socket.off("job_started");
-      socket.off("job_completed"); socket.off("job_cancelled");
+      socket.off("job_accepted"); socket.off("job_started"); socket.off("job_arrived");
+      socket.off("job_completed"); socket.off("job_cancelled"); socket.off("payment_completed"); socket.off("review_submitted");
     };
   }, [socket, refreshJobs, updateJobMechanic, updateJobStatus]);
   const completed = jobs.filter(j => j.status === "completed");
@@ -1028,7 +1093,7 @@ export default function CustomerDashboard() {
           )}
 
           {/* Completed jobs needing payment */}
-          {pendingPay.map(job => (
+          {pendingPay.filter(job => !active.some(activeJob => activeJob.id === job.id)).map(job => (
             <View key={job.id} style={{ marginBottom: 8 }}>
               <ActiveJobCard job={job} />
             </View>

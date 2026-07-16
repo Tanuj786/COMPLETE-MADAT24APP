@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../auth";
-import { emitToUser } from "../socket";
+import { emitToUser, emitToJob } from "../socket";
 import { sendPushToUser } from "../push";
 
 const r = Router();
@@ -37,6 +37,8 @@ r.post("/:jobId", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
   });
 
   emitToUser(job.mechanicId, "rating_received", { jobId: job.id, rating, review });
+  emitToUser(job.customerId, "review_submitted", { jobId: job.id, rating, review });
+  emitToJob(job.id, "review_submitted", { jobId: job.id, rating, review });
   await prisma.notification.create({
     data: {
       userId: job.mechanicId,

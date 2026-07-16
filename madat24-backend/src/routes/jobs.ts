@@ -101,6 +101,7 @@ r.get("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
         },
       },
       media: true,
+      review: true,
     },
     orderBy: { createdAt: "desc" },
   });

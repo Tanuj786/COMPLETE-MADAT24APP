@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../prisma";
 import { requireAuth } from "../auth";
-import { emitToUser } from "../socket";
+import { emitToUser, emitToJob } from "../socket";
 import { env, isProduction, isRzpConfigured } from "../env";
 import { sendPushToUser } from "../push";
 
@@ -11,6 +11,13 @@ const r = Router();
 const RZP_KEY = env.RAZORPAY_KEY_ID;
 const RZP_SECRET = env.RAZORPAY_KEY_SECRET;
 const demoPaymentsEnabled = env.ENABLE_DEMO_PAYMENTS || !isProduction;
+
+const emitPaymentCompleted = (job: { id: string; customerId: string; mechanicId: string | null }, invoice: { total: number }, method?: string) => {
+  const payload = { jobId: job.id, total: invoice.total, method: method || "UPI" };
+  emitToUser(job.customerId, "payment_completed", payload);
+  emitToJob(job.id, "payment_completed", payload);
+  if (job.mechanicId) emitToUser(job.mechanicId, "payment_received", payload);
+};
 
 // ─── GET /api/payments/invoice/:jobId ───────────────────────────────
 r.get("/invoice/:jobId", requireAuth, async (req, res) => {
@@ -127,8 +134,8 @@ r.post("/verify", requireAuth, async (req, res) => {
       paidAt: new Date(),
     },
   });
+  emitPaymentCompleted(job, updated, method);
   if (job.mechanicId) {
-    emitToUser(job.mechanicId, "payment_received", { jobId: job.id, total: updated.total, method });
     await prisma.notification.create({
       data: {
         userId: job.mechanicId,
@@ -159,9 +166,7 @@ r.post("/invoice/:jobId/pay", requireAuth, async (req, res) => {
     where: { id: job.invoice.id },
     data: { paymentStatus: "paid", paymentMethod: method, paidAt: new Date() },
   });
-  if (job.mechanicId) {
-    emitToUser(job.mechanicId, "payment_received", { jobId: job.id, total: updated.total, method });
-  }
+  emitPaymentCompleted(job, updated, method);
   res.json({ ok: true, invoice: updated });
 });
 
@@ -192,8 +197,8 @@ r.post("/invoice/:jobId/tap-to-pay", requireAuth, async (req, res) => {
       ...(wasCredit ? { creditClearedAt: new Date() } : {}),
     } as any,
   });
+  emitPaymentCompleted(job, updated, method);
   if (job.mechanicId) {
-    emitToUser(job.mechanicId, "payment_received", { jobId: job.id, total: updated.total, method });
     await prisma.notification.create({
       data: {
         userId: job.mechanicId,

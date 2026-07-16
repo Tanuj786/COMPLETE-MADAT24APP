@@ -4,7 +4,7 @@ export type ServiceType =
 
 export type VehicleType = "car"|"bike"|"electric"|"battery"|"tyre"|"general";
 
-export type JobStatus = "pending"|"accepted"|"in-progress"|"completed"|"cancelled";
+export type JobStatus = "pending"|"accepted"|"arrived"|"in-progress"|"completed"|"cancelled";
 
 export interface Location {
   address: string; city: string; state: string; pincode: string;
@@ -38,7 +38,7 @@ export interface CustomerJob {
   location: Location; description?: string; status: JobStatus;
   customerMedia: MediaItem[]; progressMedia?: MediaItem[];
   completionMedia?: MediaItem[];
-  timestamps: { requested: string; accepted?: string; started?: string; completed?: string; cancelled?: string };
+  timestamps: { requested: string; accepted?: string; arrived?: string; started?: string; completed?: string; cancelled?: string };
   mechanic?: { id: string; name: string; shopName: string; phone: string; rating: number; coordinates?: { lat: number; lng: number } };
   estimatedArrival?: string; rating?: number; review?: string; invoice?: Invoice;
 }
@@ -66,7 +66,7 @@ export interface MechanicMetrics {
 
 export interface AppNotification {
   id: string; userId: string;
-  type: "job_request"|"job_accepted"|"job_started"|"job_completed"|"payment_requested"|"payment_received"|"rating_received"|"message"|"info";
+  type: "job_request"|"job_accepted"|"job_arrived"|"job_started"|"job_completed"|"payment_requested"|"payment_received"|"payment_completed"|"rating_received"|"review_submitted"|"message"|"info";
   title: string; message: string; read: boolean; createdAt: string;
 }
 

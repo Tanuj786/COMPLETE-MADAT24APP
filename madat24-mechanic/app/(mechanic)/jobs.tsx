@@ -15,7 +15,7 @@ import { PhotoStrip, selectAndUploadPhoto } from "~/components/shared/PhotoPicke
 import type { Invoice, MediaItem, ChatMessage } from "~/types";
 import { formatDistanceToNow } from "date-fns";
 import { useFocusEffect } from "expo-router";
-import { apiCompleteJob, apiGetMechJobs, apiStartJob } from "~/lib/api";
+import { apiArriveJob, apiCompleteJob, apiGetMechJobs, apiStartJob } from "~/lib/api";
 
 // ── Photo fullscreen ──────────────────────────────────────────────
 function PhotoFull({ uri, onClose }: { uri: string; onClose: () => void }) {
@@ -311,7 +311,25 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
   const [expanded, setExpanded] = useState(true);
   const { startJob, addProgressMedia, syncJobsFromBackend } = useMechanicStore();
   const { addNotification } = useNotifStore();
-  const statusColor = job.status === "accepted" ? C.blue : C.orange;
+  const statusColor = job.status === "accepted" ? C.blue : job.status === "arrived" ? C.green : C.orange;
+
+  const handleArrive = () => {
+    Alert.alert("Mark Arrived?", "Confirm that you have reached the customer location.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Arrived",
+        onPress: async () => {
+          try {
+            await apiArriveJob(job.id);
+            await apiGetMechJobs().then(({ jobs }) => syncJobsFromBackend(jobs));
+            addNotification({ id: `n-mech-arrive-${Date.now()}`, userId: "mech-demo", type: "job_arrived", title: "Marked Arrived", message: `You reached ${job.customer?.name || "the customer"}`, read: false, createdAt: new Date().toISOString() });
+          } catch (err: any) {
+            Alert.alert("Could Not Mark Arrived", err?.message || "Please check the server and try again.");
+          }
+        },
+      },
+    ]);
+  };
 
   const handleStart = () => {
     Alert.alert("Start Job?", "Confirm you're at the customer location and ready to work.", [
@@ -335,6 +353,8 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
   const timelineSteps = [
     { label: "Request Received", time: job.timestamps?.requested ? new Date(job.timestamps.requested).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined, done: true, color: C.green },
     { label: "Accepted", time: job.timestamps?.accepted ? new Date(job.timestamps.accepted).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined, done: !!job.timestamps?.accepted, color: C.blue },
+    { label: "En Route", time: job.timestamps?.accepted ? new Date(job.timestamps.accepted).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined, done: !!job.timestamps?.accepted, active: job.status === "accepted", color: C.blue },
+    { label: "Arrived", time: job.timestamps?.arrived ? new Date(job.timestamps.arrived).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined, done: job.status === "arrived" || job.status === "in-progress", active: job.status === "arrived", color: C.green },
     { label: "In Progress", time: job.timestamps?.started ? new Date(job.timestamps.started).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined, done: !!job.timestamps?.started, active: job.status === "in-progress", color: C.orange },
   ];
 
@@ -345,7 +365,7 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {job.status === "in-progress" && <PulseDot color={C.orange} size={5} />}
           <Text style={{ color: statusColor, fontFamily: FONTS.bold, fontSize: 12, letterSpacing: 1 }}>
-            {job.status === "accepted" ? "READY TO START" : "IN PROGRESS"}
+            {job.status === "accepted" ? "EN ROUTE" : job.status === "arrived" ? "ARRIVED" : "IN PROGRESS"}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -391,7 +411,7 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
 
           {/* Customer vehicle photos (uploaded BEFORE acceptance) */}
           {/* Live tracking map for mechanic to see customer location */}
-          {["accepted", "in-progress"].includes(job.status) && !!job.customer && (
+          {["accepted", "arrived", "in-progress"].includes(job.status) && !!job.customer && (
             <TrackingMap
               customerName={job.customer?.name ?? "Customer"}
               mechanicName={user?.name ?? "Mechanic"}
@@ -437,10 +457,19 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
 
           {/* Action buttons */}
           {job.status === "accepted" && (
-            <Pressable onPress={handleStart} style={{ borderRadius: 16, overflow: "hidden" }}>
+            <Pressable onPress={handleArrive} style={{ borderRadius: 16, overflow: "hidden" }}>
               <LinearGradient colors={[C.blue, C.blueDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 18, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 10 }}>
+                <Icon name="MapPinCheck" size={20} color="white" />
+                <Text style={{ color: "white", fontFamily: FONTS.black, fontSize: 16 }}>Mark Arrived</Text>
+              </LinearGradient>
+            </Pressable>
+          )}
+
+          {job.status === "arrived" && (
+            <Pressable onPress={handleStart} style={{ borderRadius: 16, overflow: "hidden" }}>
+              <LinearGradient colors={[C.green, C.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 18, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 10 }}>
                 <Icon name="Play" size={20} color="white" />
-                <Text style={{ color: "white", fontFamily: FONTS.black, fontSize: 16 }}>Start Job</Text>
+                <Text style={{ color: "white", fontFamily: FONTS.black, fontSize: 16 }}>Start Work</Text>
               </LinearGradient>
             </Pressable>
           )}
