@@ -1,16 +1,32 @@
 import React from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { formatDistanceToNow } from "date-fns";
+import { useFocusEffect } from "expo-router";
 import Icon from "~/lib/icons/Icon";
 import { useTheme } from "~/components/ui";
 import { FONTS } from "~/constants";
-import { useMechanicStore } from "~/stores";
+import { useAuthStore, useMechanicStore } from "~/stores";
+import { apiGetMechReviews } from "~/lib/api";
 
 export default function Reviews() {
   const C = useTheme();
-  const { reviews, metrics } = useMechanicStore();
+  const { user } = useAuthStore();
+  const { reviews, metrics, syncReviewsFromBackend } = useMechanicStore();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user?.id) return;
+      let cancelled = false;
+      apiGetMechReviews(user.id)
+        .then(({ reviews }) => {
+          if (!cancelled) syncReviewsFromBackend(reviews);
+        })
+        .catch(() => {});
+      return () => { cancelled = true; };
+    }, [user?.id, syncReviewsFromBackend]),
+  );
 
   // Distribution from actual review data
   const dist = [5, 4, 3, 2, 1].map(r => ({
@@ -117,6 +133,16 @@ export default function Reviews() {
                     "{rv.review}"
                   </Text>
                 ) : null}
+
+                {!!rv.photos?.length && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, marginBottom: rv.mechanicResponse ? 12 : 0 }}>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      {rv.photos.map(photo => (
+                        <Image key={photo.id} source={{ uri: photo.uri }} style={{ width: 72, height: 72, borderRadius: 12, borderWidth: 1, borderColor: C.border }} />
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
 
                 {/* Mechanic response */}
                 {rv.mechanicResponse && (

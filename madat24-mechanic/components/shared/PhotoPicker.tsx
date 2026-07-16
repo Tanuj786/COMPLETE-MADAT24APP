@@ -91,7 +91,7 @@ export async function pickPhoto(source: "camera" | "gallery"): Promise<string | 
 // ── Main hook: show picker and optionally upload ─────────────────
 export async function selectAndUploadPhoto(opts: {
   jobId?: string;
-  category?: "customer" | "progress" | "completion";
+  category?: "customer" | "progress" | "completion" | "review";
   onPicked: (localUri: string, remoteUrl?: string) => void;
   onError?: (msg: string) => void;
 }): Promise<void> {
@@ -148,7 +148,7 @@ interface PhotoStripProps {
   label:    string;
   readonly?: boolean;
   jobId?:   string;
-  category?: "customer" | "progress" | "completion";
+  category?: "customer" | "progress" | "completion" | "review";
   onAdd?:   (localUri: string, remoteUrl?: string) => void;
 }
 

@@ -139,6 +139,7 @@ const customerJobFromBackend = (job: any): CustomerJob => ({
   customerMedia: mediaFromBackend(job.media, "customer"),
   progressMedia: mediaFromBackend(job.media, "progress"),
   completionMedia: mediaFromBackend(job.media, "completion"),
+  reviewMedia: mediaFromBackend(job.media, "review"),
   timestamps: {
     requested: new Date(job.requestedAt || job.createdAt || Date.now()).toISOString(),
     accepted: job.acceptedAt ? new Date(job.acceptedAt).toISOString() : undefined,

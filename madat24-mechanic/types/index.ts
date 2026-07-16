@@ -37,7 +37,7 @@ export interface CustomerJob {
   serviceType: ServiceType; vehicleInfo: VehicleInfo;
   location: Location; description?: string; status: JobStatus;
   customerMedia: MediaItem[]; progressMedia?: MediaItem[];
-  completionMedia?: MediaItem[];
+  completionMedia?: MediaItem[]; reviewMedia?: MediaItem[];
   timestamps: { requested: string; accepted?: string; arrived?: string; started?: string; completed?: string; cancelled?: string };
   mechanic?: { id: string; name: string; shopName: string; phone: string; rating: number };
   estimatedArrival?: string; rating?: number; review?: string; invoice?: Invoice;
@@ -74,7 +74,7 @@ export interface AppNotification {
 export interface Review {
   id: string; jobId: string; customerId: string; mechanicId: string;
   customerName: string; rating: number; review: string; tags?: string[];
-  mechanicResponse?: string; mechanicResponseAt?: string; createdAt: string;
+  photos?: MediaItem[]; mechanicResponse?: string; mechanicResponseAt?: string; createdAt: string;
 }
 
 

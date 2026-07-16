@@ -307,7 +307,7 @@ export async function apiSendChatImage(jobId: string, imageUri: string) {
 // ═══════════════════════════════════════════════════════════
 export async function apiUploadMedia(
   jobId: string, fileUri: string,
-  category: "customer" | "progress" | "completion", mimeType = "image/jpeg",
+  category: "customer" | "progress" | "completion" | "review", mimeType = "image/jpeg",
 ) {
   const form = new FormData();
   form.append("file", { uri: fileUri, type: mimeType, name: "media.jpg" } as any);

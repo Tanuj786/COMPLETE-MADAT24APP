@@ -8,10 +8,11 @@ const r = Router();
 
 // POST /api/reviews/:jobId — customer submits a review
 r.post("/:jobId", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
-  const job = await prisma.job.findUnique({ where: { id: req.params.jobId } });
+  const job = await prisma.job.findUnique({ where: { id: req.params.jobId }, include: { invoice: true } });
   if (!job) return res.status(404).json({ error: "Job not found" });
   if (job.customerId !== req.user!.id) return res.status(403).json({ error: "Not your job" });
   if (job.status !== "completed") return res.status(400).json({ error: "Can only review completed jobs" });
+  if (job.invoice?.paymentStatus !== "paid") return res.status(400).json({ error: "Pay the invoice before reviewing" });
   if (!job.mechanicId) return res.status(400).json({ error: "Job has no mechanic" });
 
   const rating = Number(req.body?.rating);
@@ -61,7 +62,10 @@ r.post("/:jobId", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
 r.get("/mechanic/:mechanicId", requireAuth, async (req, res) => {
   const reviews = await prisma.review.findMany({
     where: { mechanicId: req.params.mechanicId },
-    include: { customer: { select: { id: true, name: true } } },
+    include: {
+      customer: { select: { id: true, name: true } },
+      job: { include: { media: { where: { category: "review" }, orderBy: { uploadedAt: "asc" } } } },
+    },
     orderBy: { createdAt: "desc" },
   });
   res.json({
@@ -70,6 +74,13 @@ r.get("/mechanic/:mechanicId", requireAuth, async (req, res) => {
       customerId: rv.customerId, customerName: rv.customer.name,
       mechanicId: rv.mechanicId, rating: rv.rating, review: rv.review,
       tags: (rv.tags || "").split(",").filter(Boolean),
+      photos: (rv.job.media || []).map(m => ({
+        id: m.id,
+        type: m.mimeType?.startsWith("video/") ? "video" : "photo",
+        uri: m.url,
+        uploadedAt: m.uploadedAt.toISOString(),
+        uploadedBy: m.uploadedBy,
+      })),
       mechanicResponse: rv.mechanicResponse,
       mechanicResponseAt: rv.mechanicResponseAt?.toISOString(),
       createdAt: rv.createdAt.toISOString(),

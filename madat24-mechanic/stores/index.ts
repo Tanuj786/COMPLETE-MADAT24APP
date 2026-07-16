@@ -142,6 +142,7 @@ export type ActiveJob = {
   customerMedia: MediaItem[];
   progressMedia: MediaItem[];
   completionMedia: MediaItem[];
+  reviewMedia?: MediaItem[];
   invoice?: Invoice;
 };
 
@@ -176,6 +177,7 @@ const activeJobFromBackend = (job: any): ActiveJob => ({
   customerMedia: mediaFromBackend(job.media, "customer"),
   progressMedia: mediaFromBackend(job.media, "progress"),
   completionMedia: mediaFromBackend(job.media, "completion"),
+  reviewMedia: mediaFromBackend(job.media, "review"),
   invoice: job.invoice
     ? {
         id: job.invoice.id,
@@ -207,6 +209,7 @@ interface MechanicStore {
   setShopProfile: (sp: ShopProfile) => void;
   updateShopProfile: (p: Partial<ShopProfile>) => void;
   setMetrics: (m: MechanicMetrics) => void;
+  syncReviewsFromBackend: (reviews: any[]) => void;
   syncJobsFromBackend: (jobs: any[]) => void;
   addIncomingRequest: (req: ServiceRequest) => void;   // called when customer sends request
   removeRequest: (id: string) => void;                 // remove after another mechanic accepts
@@ -236,6 +239,29 @@ export const useMechanicStore = create<MechanicStore>((set, get) => ({
   setShopProfile: (sp) => set({ shopProfile: sp }),
   updateShopProfile: (p) => set(s => ({ shopProfile: s.shopProfile ? { ...s.shopProfile, ...p } : null })),
   setMetrics: (m) => set({ metrics: m }),
+  syncReviewsFromBackend: (reviews) =>
+    set(s => {
+      const next = reviews.map((rv: any) => ({
+        id: rv.id,
+        jobId: rv.jobId,
+        customerId: rv.customerId,
+        customerName: rv.customerName || "Customer",
+        mechanicId: rv.mechanicId,
+        rating: rv.rating,
+        review: rv.review || "",
+        tags: rv.tags || [],
+        photos: rv.photos || [],
+        mechanicResponse: rv.mechanicResponse || undefined,
+        mechanicResponseAt: rv.mechanicResponseAt || undefined,
+        createdAt: rv.createdAt,
+      }));
+      const total = next.length;
+      const average = total ? next.reduce((sum: number, rv: Review) => sum + rv.rating, 0) / total : s.metrics.averageRating;
+      return {
+        reviews: next,
+        metrics: { ...s.metrics, reviewCount: total, averageRating: total ? Math.round(average * 10) / 10 : s.metrics.averageRating },
+      };
+    }),
   syncJobsFromBackend: (jobs) =>
     set(s => {
       const active = jobs

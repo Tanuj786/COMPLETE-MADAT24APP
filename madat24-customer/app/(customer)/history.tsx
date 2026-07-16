@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Animated } from "react-native";
+import { View, Text, ScrollView, Pressable, Animated, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
@@ -80,6 +80,29 @@ export default function History() {
                             <Text style={{ color: COLORS.amber, fontSize: 12 }}>⭐</Text>
                             <Text style={{ color: COLORS.amber, fontFamily: FONTS.bold, fontSize: 12 }}>{job.rating}</Text>
                           </View>
+                        )}
+                      </View>
+                    )}
+
+                    {job.rating && (
+                      <View style={{ backgroundColor: COLORS.bg1, borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: COLORS.amber + "25" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: job.review ? 6 : 0 }}>
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <Text key={i} style={{ fontSize: 12 }}>{i <= (job.rating || 0) ? "⭐" : "☆"}</Text>
+                          ))}
+                          <Text style={{ color: COLORS.amber, fontFamily: FONTS.bold, fontSize: 12, marginLeft: 4 }}>Your review</Text>
+                        </View>
+                        {!!job.review && (
+                          <Text style={{ color: COLORS.text2, fontFamily: FONTS.regular, fontSize: 12, lineHeight: 18 }}>{job.review}</Text>
+                        )}
+                        {!!job.reviewMedia?.length && (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                            <View style={{ flexDirection: "row", gap: 7 }}>
+                              {job.reviewMedia.map(photo => (
+                                <Image key={photo.id} source={{ uri: photo.uri }} style={{ width: 58, height: 58, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border }} />
+                              ))}
+                            </View>
+                          </ScrollView>
                         )}
                       </View>
                     )}

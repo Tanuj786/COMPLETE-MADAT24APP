@@ -169,6 +169,7 @@ function ReviewModal({ visible, jobId, mechanicName, onClose }: { visible: boole
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<MediaItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const { addReview: customerAddReview } = useCustomerStore();
   const { addReview: mechanicAddReview } = useMechanicStore();
@@ -218,7 +219,7 @@ function ReviewModal({ visible, jobId, mechanicName, onClose }: { visible: boole
       <View style={{ flex: 1, backgroundColor: "#000000CC", justifyContent: "flex-end" }}>
         <View style={{ backgroundColor: C.bg1, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: Platform.OS === "ios" ? 40 : 24 }}>
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: "center", marginBottom: 20 }} />
-          <Text style={{ color: C.text1, fontFamily: FONTS.black, fontSize: 22, marginBottom: 4 }}>Rate Your Experience</Text>
+          <Text style={{ color: C.text1, fontFamily: FONTS.black, fontSize: 22, marginBottom: 4 }}>Rate Your Mechanic</Text>
           <Text style={{ color: C.text2, fontFamily: FONTS.regular, fontSize: 14, marginBottom: 20 }}>How was the service by {mechanicName}?</Text>
 
           {/* Stars */}
@@ -241,6 +242,27 @@ function ReviewModal({ visible, jobId, mechanicName, onClose }: { visible: boole
 
           {/* Review text */}
           <TextInput value={review} onChangeText={setReview} placeholder="Write a review (optional)..." placeholderTextColor={C.text3} multiline numberOfLines={3} style={{ backgroundColor: C.bg, borderRadius: 14, borderWidth: 1.5, borderColor: C.border, color: C.text1, fontFamily: FONTS.regular, fontSize: 14, padding: 14, minHeight: 80, textAlignVertical: "top", marginBottom: 16 }} />
+
+          <PhotoStrip
+            photos={photos}
+            label="Optional review photos"
+            jobId={jobId}
+            category="review"
+            onAdd={(localUri, remoteUrl) => {
+              setPhotos(prev => {
+                const uri = remoteUrl || localUri;
+                const withoutLocal = remoteUrl ? prev.filter(p => p.uri !== localUri) : prev;
+                if (withoutLocal.some(p => p.uri === uri)) return withoutLocal;
+                return [...withoutLocal, {
+                  id: `review-photo-${Date.now()}`,
+                  type: "photo",
+                  uri,
+                  uploadedAt: new Date().toISOString(),
+                  uploadedBy: "customer",
+                }];
+              });
+            }}
+          />
 
           <Pressable onPress={handleSubmit} disabled={submitting} style={{ borderRadius: 14, overflow: "hidden" }}>
             <LinearGradient colors={[C.yellow, "#D97706"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 17, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
