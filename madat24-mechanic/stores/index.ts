@@ -142,7 +142,7 @@ export const useCustomerStore = create<CustomerStore>(set => ({
 // ─── MECHANIC ──────────────────────────────────────────────────────
 export type ActiveJob = {
   id: string; serviceType: string; status: "accepted" | "arrived" | "in-progress";
-  location?: { address: string; city: string };
+  location?: { address: string; city: string; coordinates?: { lat: number; lng: number } };
   customer?: { id: string; name: string; phone: string };
   vehicleInfo?: { type: string; make?: string; model?: string };
   description?: string;
@@ -184,7 +184,13 @@ const activeJobFromBackend = (job: any): ActiveJob => ({
   id: job.id,
   serviceType: job.serviceType,
   status: job.status === "arrived" ? "arrived" : job.status === "in-progress" ? "in-progress" : "accepted",
-  location: { address: job.address || "", city: job.city || "" },
+  location: {
+    address: job.address || "",
+    city: job.city || "",
+    coordinates: Number.isFinite(job.latitude) && Number.isFinite(job.longitude)
+      ? { lat: job.latitude, lng: job.longitude }
+      : undefined,
+  },
   customer: job.customer ? { id: job.customer.id, name: job.customer.name, phone: job.customer.phone } : undefined,
   vehicleInfo: {
     type: job.vehicleType || "car",
@@ -327,7 +333,11 @@ export const useMechanicStore = create<MechanicStore>((set, get) => ({
       const sp = s.shopProfile;
       const job: ActiveJob = {
         id: req.id, serviceType: req.serviceType, status: "accepted",
-        location: { address: req.location.address, city: req.location.city },
+        location: {
+          address: req.location.address,
+          city: req.location.city,
+          coordinates: req.location.coordinates,
+        },
         customer: { id: req.customerId, name: req.customerName, phone: req.customerPhone },
         vehicleInfo: req.vehicleInfo, description: req.description,
         timestamps: { requested: req.createdAt, accepted: new Date().toISOString() },

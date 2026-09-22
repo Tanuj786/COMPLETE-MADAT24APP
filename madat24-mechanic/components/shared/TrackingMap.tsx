@@ -142,18 +142,20 @@ interface TrackingMapProps {
   eta?: string;           // e.g. "12 min"
   status?: string;        // "accepted" | "in-progress" | "completed"
   viewerRole: "customer" | "mechanic";
+  onNavigate?: () => void;
 }
 
 export function TrackingMap({
   customerName, mechanicName, mechanicShop,
   customerCoords, mechanicCoords,
-  distance = 2.4, eta = "12 min",
+  distance, eta,
   status = "accepted",
   viewerRole,
+  onNavigate,
 }: TrackingMapProps) {
   const C = useTheme();
-  const [liveEta, setLiveEta] = useState(eta);
-  const [liveKm, setLiveKm] = useState(distance);
+  const [liveEta, setLiveEta] = useState(eta || "");
+  const [liveKm, setLiveKm] = useState<number | undefined>(distance);
   const headerSlide = useRef(new Animated.Value(-20)).current;
   const headerFade  = useRef(new Animated.Value(0)).current;
   const mapSlide    = useRef(new Animated.Value(30)).current;
@@ -172,11 +174,11 @@ export function TrackingMap({
     ]).start();
 
     // Simulate live ETA countdown
-    if (status === "accepted") {
+    if (status === "accepted" && eta) {
       let mins = parseInt(eta);
       const interval = setInterval(() => {
         mins = Math.max(1, mins - 1);
-        setLiveKm(prev => Math.max(0.1, parseFloat((prev - 0.08).toFixed(1))));
+        setLiveKm(prev => prev == null ? prev : Math.max(0.1, parseFloat((prev - 0.08).toFixed(1))));
         setLiveEta(`${mins} min`);
         if (mins <= 1) clearInterval(interval);
       }, 8000);
@@ -204,7 +206,7 @@ export function TrackingMap({
               {statusEmoji} {statusLabel}
             </Text>
           </View>
-          <EtaBadge eta={liveEta} color={statusColor} />
+          {!!liveEta && <EtaBadge eta={liveEta} color={statusColor} />}
         </LinearGradient>
       </Animated.View>
 
@@ -248,9 +250,11 @@ export function TrackingMap({
           </View>
 
           {/* Distance pill */}
+          {liveKm != null && (
           <View style={{ position: "absolute", bottom: 10, alignSelf: "center", left: "50%", transform: [{ translateX: -40 }], backgroundColor: "#1C2535CC", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
             <Text style={{ color: "#E8EDF5", fontFamily: FONTS.bold, fontSize: 10 }}>📏 {liveKm} km away</Text>
           </View>
+          )}
 
           {/* GPS coords badge */}
           <View style={{ position: "absolute", top: 8, right: 10, backgroundColor: "#00D4AA15", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: "#00D4AA30" }}>
@@ -303,9 +307,15 @@ export function TrackingMap({
 
       {/* ── Share location button ───────────────────────────── */}
       <View style={{ paddingHorizontal: 12, paddingBottom: 14 }}>
-        <Pressable style={{ backgroundColor: C.bg1, borderRadius: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: C.border }}>
-          <Icon name="Share2" size={14} color={C.text3} />
-          <Text style={{ color: C.text3, fontFamily: FONTS.medium, fontSize: 12 }}>Share Live Location</Text>
+        <Pressable
+          onPress={viewerRole === "mechanic" ? onNavigate : undefined}
+          disabled={viewerRole === "mechanic" && !onNavigate}
+          style={{ backgroundColor: viewerRole === "mechanic" ? C.primaryDim : C.bg1, borderRadius: 12, paddingVertical: 11, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: viewerRole === "mechanic" ? C.primary + "50" : C.border }}
+        >
+          <Icon name={viewerRole === "mechanic" ? "Navigation" : "Share2"} size={14} color={viewerRole === "mechanic" ? C.primary : C.text3} />
+          <Text style={{ color: viewerRole === "mechanic" ? C.primary : C.text3, fontFamily: FONTS.semibold, fontSize: 12 }}>
+            {viewerRole === "mechanic" ? "Navigate to Customer" : "Share Live Location"}
+          </Text>
         </Pressable>
       </View>
     </View>

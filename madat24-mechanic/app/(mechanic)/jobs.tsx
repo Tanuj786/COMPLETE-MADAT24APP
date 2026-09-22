@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   View, Text, ScrollView, Pressable, TextInput,
-  Alert, Modal, Image, Platform, Animated,
+  Alert, Modal, Image, Platform, Animated, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -394,6 +394,21 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
   const { addNotification } = useNotifStore();
   const statusColor = job.status === "accepted" ? C.blue : job.status === "arrived" ? C.green : C.orange;
 
+  const handleNavigate = async () => {
+    const destination = job.location?.coordinates;
+    if (!destination || (!destination.lat && !destination.lng)) {
+      Alert.alert("Location unavailable", "The customer GPS location is not available for this request.");
+      return;
+    }
+    const encodedDestination = encodeURIComponent(`${destination.lat},${destination.lng}`);
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodedDestination}&travelmode=driving&dir_action=navigate`;
+    try {
+      await Linking.openURL(mapsUrl);
+    } catch {
+      Alert.alert("Could not open maps", "Please install Google Maps or try again.");
+    }
+  };
+
   const handleArrive = () => {
     Alert.alert("Mark Arrived?", "Confirm that you have reached the customer location.", [
       { text: "Cancel", style: "cancel" },
@@ -496,11 +511,11 @@ function ActiveJobCard({ job }: { job: ActiveJob }) {
             <TrackingMap
               customerName={job.customer?.name ?? "Customer"}
               mechanicName={user?.name ?? "Mechanic"}
-              customerCoords={undefined}
-              distance={2.4}
-              eta={job.status === "accepted" ? "12 min" : "On site"}
+              customerCoords={job.location?.coordinates}
+              eta={job.status === "accepted" ? undefined : "On site"}
               status={job.status}
               viewerRole="mechanic"
+              onNavigate={job.location?.coordinates ? handleNavigate : undefined}
             />
           )}
 

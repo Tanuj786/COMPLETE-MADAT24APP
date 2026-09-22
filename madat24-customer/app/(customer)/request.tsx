@@ -422,8 +422,25 @@ export default function CustomerRequest() {
     setSearching(true);
     setMechanics([]);
 
-    const lat = coords?.lat ?? 28.6139;
-    const lng = coords?.lng ?? 77.2090;
+    let requestCoords = coords;
+    if (!requestCoords) {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setSearching(false);
+          Alert.alert("Location required", "Allow location access so the mechanic can navigate to your vehicle.");
+          return;
+        }
+        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        requestCoords = { lat: current.coords.latitude, lng: current.coords.longitude };
+        setCoords(requestCoords);
+      } catch {
+        setSearching(false);
+        Alert.alert("Location unavailable", "Could not get your GPS location. Please try again.");
+        return;
+      }
+    }
+    const { lat, lng } = requestCoords;
 
     // Step 1 — Create job on backend.
     // This instantly broadcasts to online mechanics within 10km whose
