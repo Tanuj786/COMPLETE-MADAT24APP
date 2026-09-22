@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../auth";
 import { emitToUser, emitToJob } from "../socket";
-import { RADIUS_KM, alertMechanic, broadcastJobTaken, haversineKm } from "../dispatch";
+import { RADIUS_KM, alertMechanic, broadcastJobTaken, haversineKm, mechanicCanHandleJob } from "../dispatch";
 import { sendPushToUser } from "../push";
 import { toServiceRequest } from "../jobPresenter";
 
@@ -22,31 +22,34 @@ const parseNotificationData = (data: string | null) => {
   }
 };
 
-const splitServices = (s: string | null | undefined) =>
-  (s || "").split(",").map(x => x.trim()).filter(Boolean);
-
 async function alertPendingJobsForMechanic(mechanicUserId: string, latitude: number, longitude: number) {
   const profile = await prisma.mechanicProfile.findUnique({
     where: { userId: mechanicUserId },
-    select: { services: true },
+    select: { services: true, vehicleTypes: true },
   });
-  const services = splitServices(profile?.services);
+  if (!profile) return 0;
   const jobs = await prisma.job.findMany({
     where: { status: "pending", mechanicId: null },
-    select: { id: true, latitude: true, longitude: true, serviceType: true },
+    select: { id: true, latitude: true, longitude: true, serviceType: true, vehicleType: true },
   });
 
   let alerted = 0;
   for (const job of jobs) {
     const distance = Number(haversineKm(latitude, longitude, job.latitude, job.longitude).toFixed(2));
     if (distance > RADIUS_KM) continue;
-    if (services.length && !services.includes(job.serviceType)) continue;
+    if (!mechanicCanHandleJob(profile, job.serviceType, job.vehicleType)) continue;
     if (await alertMechanic(job.id, mechanicUserId, job.serviceType, distance)) alerted++;
   }
   return alerted;
 }
 
 r.get("/requests", async (req, res) => {
+  const profile = await prisma.mechanicProfile.findUnique({
+    where: { userId: req.user!.id },
+    select: { services: true, vehicleTypes: true },
+  });
+  if (!profile) return res.json({ requests: [] });
+
   const notifications = await prisma.notification.findMany({
     where: { userId: req.user!.id, type: "job_request" },
     orderBy: { createdAt: "desc" },
@@ -73,7 +76,9 @@ r.get("/requests", async (req, res) => {
   });
 
   res.json({
-    requests: jobs.map(job => toServiceRequest(job, distances.get(job.id))),
+    requests: jobs
+      .filter(job => mechanicCanHandleJob(profile, job.serviceType, job.vehicleType))
+      .map(job => toServiceRequest(job, distances.get(job.id))),
   });
 });
 
@@ -81,6 +86,15 @@ r.get("/requests", async (req, res) => {
 // Atomic claim — uses updateMany with WHERE status="pending" so two
 // mechanics tapping accept at the same millisecond can't both win.
 r.post("/requests/:id/accept", async (req, res) => {
+  const [pendingJob, profile] = await Promise.all([
+    prisma.job.findUnique({ where: { id: req.params.id } }),
+    prisma.mechanicProfile.findUnique({ where: { userId: req.user!.id } }),
+  ]);
+  if (!pendingJob) return res.status(404).json({ error: "Job not found" });
+  if (!profile || !mechanicCanHandleJob(profile, pendingJob.serviceType, pendingJob.vehicleType)) {
+    return res.status(403).json({ error: "This request does not match your vehicle specialties" });
+  }
+
   const claim = await prisma.job.updateMany({
     where: { id: req.params.id, status: "pending", mechanicId: null },
     data: {

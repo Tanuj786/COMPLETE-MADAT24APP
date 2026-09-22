@@ -9,7 +9,7 @@ const r = Router();
 // POST /api/auth/signup
 r.post("/signup", authLimiter, validate(SignupSchema), async (req, res) => {
   try {
-    const { name, email, phone, password, role } = req.body;
+    const { name, email, phone, password, role, mechanicProfile } = req.body;
     const normEmail = email; // already normalized by zod
 
     const existing = await prisma.user.findFirst({
@@ -20,23 +20,38 @@ r.post("/signup", authLimiter, validate(SignupSchema), async (req, res) => {
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: {
-        name: String(name).trim(),
-        email: normEmail,
-        phone: String(phone).trim(),
-        passwordHash,
-        role,
-        emailVerified: false,
-        phoneVerified: false,
-      },
-    });
-    // Auto-create empty mechanic profile so /mechanic/profile works immediately
-    if (role === "MECHANIC") {
-      await prisma.mechanicProfile.create({
-        data: { userId: user.id, shopName: `${user.name}'s Shop` },
+    const user = await prisma.$transaction(async tx => {
+      const created = await tx.user.create({
+        data: {
+          name: String(name).trim(),
+          email: normEmail,
+          phone: String(phone).trim(),
+          passwordHash,
+          role,
+          emailVerified: false,
+          phoneVerified: false,
+        },
       });
-    }
+      if (role === "MECHANIC") {
+        await tx.mechanicProfile.create({
+          data: {
+            userId: created.id,
+            shopName: mechanicProfile?.shopName || `${created.name}'s Shop`,
+            description: mechanicProfile?.description || null,
+            address: mechanicProfile?.address || null,
+            city: mechanicProfile?.city || null,
+            state: mechanicProfile?.state || null,
+            pincode: mechanicProfile?.pincode || null,
+            whatsappNumber: mechanicProfile?.whatsappNumber || null,
+            gstNumber: mechanicProfile?.gstNumber || null,
+            hourlyRate: mechanicProfile?.hourlyRate ?? 500,
+            services: mechanicProfile?.services?.join(",") || "",
+            vehicleTypes: mechanicProfile?.vehicleTypes?.join(",") || "car,bike",
+          },
+        });
+      }
+      return created;
+    });
     const token = signToken({ id: user.id, email: user.email, role: role as "CUSTOMER" | "MECHANIC" });
     return res.json({
       token,

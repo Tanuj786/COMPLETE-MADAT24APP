@@ -27,7 +27,21 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 }
 
 const splitCsv = (s: string | null | undefined) =>
-  (s || "").split(",").map(x => x.trim()).filter(Boolean);
+  (s || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+
+const normalizeJobValue = (value: string) => value.trim().toLowerCase();
+
+export function mechanicCanHandleJob(
+  profile: { services?: string | null; vehicleTypes?: string | null },
+  serviceType: string,
+  vehicleType: string,
+) {
+  const services = splitCsv(profile.services);
+  const vehicleTypes = splitCsv(profile.vehicleTypes);
+  const serviceMatches = services.length === 0 || services.includes(normalizeJobValue(serviceType));
+  const vehicleMatches = vehicleTypes.includes(normalizeJobValue(vehicleType));
+  return serviceMatches && vehicleMatches;
+}
 
 export interface EligibleMechanic {
   userId: string;
@@ -36,13 +50,14 @@ export interface EligibleMechanic {
 
 /**
  * Find all currently-online mechanics within RADIUS_KM of (lat, lng) whose
- * services list either includes the requested serviceType OR is empty
- * (an empty services list means "I accept anything").
+ * services list either includes the requested serviceType OR is empty,
+ * and whose vehicle list includes the requested vehicleType.
  */
 export async function findEligibleMechanics(
   lat: number,
   lng: number,
   serviceType: string,
+  vehicleType: string,
 ): Promise<EligibleMechanic[]> {
   const profiles = await prisma.mechanicProfile.findMany({
     where: {
@@ -50,14 +65,13 @@ export async function findEligibleMechanics(
       latitude: { not: null },
       longitude: { not: null },
     },
-    select: { userId: true, latitude: true, longitude: true, services: true },
+    select: { userId: true, latitude: true, longitude: true, services: true, vehicleTypes: true },
   });
   const eligible: EligibleMechanic[] = [];
   for (const p of profiles) {
     const dist = haversineKm(lat, lng, p.latitude!, p.longitude!);
     if (dist > RADIUS_KM) continue;
-    const services = splitCsv(p.services);
-    if (services.length && !services.includes(serviceType)) continue;
+    if (!mechanicCanHandleJob(p, serviceType, vehicleType)) continue;
     eligible.push({ userId: p.userId, distance: Number(dist.toFixed(2)) });
   }
   return eligible;

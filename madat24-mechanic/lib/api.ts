@@ -112,6 +112,11 @@ export interface ApiUser {
 export async function apiSignup(data: {
   name: string; email: string; phone: string;
   password: string; role: "CUSTOMER" | "MECHANIC";
+  mechanicProfile?: {
+    shopName: string; description?: string; address?: string; city?: string;
+    state?: string; pincode?: string; whatsappNumber?: string; gstNumber?: string;
+    hourlyRate?: number; services: string[]; vehicleTypes: string[];
+  };
 }): Promise<{ token: string; user: ApiUser }> {
   const r = await callBackend<{ token: string; user: ApiUser }>(
     "/auth/signup",

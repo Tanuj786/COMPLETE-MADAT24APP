@@ -8,6 +8,19 @@ export const SignupSchema = z.object({
   phone: z.string().min(7).max(20).trim(),
   password: z.string().min(6).max(100),
   role,
+  mechanicProfile: z.object({
+    shopName: z.string().min(1).max(120).trim(),
+    description: z.string().max(1000).optional(),
+    address: z.string().max(300).optional(),
+    city: z.string().max(100).optional(),
+    state: z.string().max(100).optional(),
+    pincode: z.string().max(20).optional(),
+    whatsappNumber: z.string().max(20).optional(),
+    gstNumber: z.string().max(30).optional(),
+    hourlyRate: z.number().nonnegative().optional(),
+    services: z.array(z.string().min(1)).default([]),
+    vehicleTypes: z.array(z.string().min(1)).min(1),
+  }).optional(),
 });
 
 export const LoginSchema = z.object({

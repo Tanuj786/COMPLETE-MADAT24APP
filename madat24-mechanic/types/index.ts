@@ -52,7 +52,7 @@ export interface ServiceRequest {
 
 export interface ShopProfile {
   id: string; mechanicId: string; shopName: string; description?: string;
-  location: Location; services: ServiceType[]; gstNumber?: string;
+  location: Location; services: ServiceType[]; vehicleTypes: string[]; gstNumber?: string;
   whatsappNumber?: string; upiId?: string | null;
   hourlyRate?: number; yearsOfExperience?: number;
   rating: number; reviewCount: number; responseRate: number; completionRate: number;

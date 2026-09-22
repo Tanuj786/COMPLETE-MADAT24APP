@@ -16,6 +16,14 @@ import { showToast } from "~/components/ui/Toast";
 const NOTIF_PREF_KEY = "madat24_notif_prefs";
 type NotifPrefs = { push: boolean; email: boolean; sms: boolean };
 const DEFAULT_NOTIF_PREFS: NotifPrefs = { push: true, email: false, sms: true };
+const VEHICLE_SPECIALTIES = [
+  { id: "car", label: "Car", icon: "Car", color: "#3B82F6" },
+  { id: "bike", label: "Bike", icon: "Bike", color: "#F97316" },
+  { id: "electric-car", label: "Electric Car", icon: "Zap", color: "#22C55E" },
+  { id: "electric-bike", label: "Electric Bike", icon: "Zap", color: "#06B6D4" },
+  { id: "truck", label: "Truck", icon: "Truck", color: "#9333EA" },
+  { id: "cycle", label: "Cycle", icon: "Bike", color: "#14B8A6" },
+] as const;
 
 export default function MechanicProfile() {
   const C = useTheme();
@@ -28,6 +36,7 @@ export default function MechanicProfile() {
   const [upiModalOpen, setUpiModalOpen] = useState(false);
   const [upiInput, setUpiInput] = useState("");
   const [savingUpi, setSavingUpi] = useState(false);
+  const [savingVehicleType, setSavingVehicleType] = useState<string | null>(null);
 
   // ── Notification preferences ─────────────────────────────────────
   const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
@@ -68,9 +77,7 @@ export default function MechanicProfile() {
       .then(r => {
         const id = r?.profile?.upiId ?? null;
         setUpiId(id);
-        if (shopProfile && id !== shopProfile.upiId) {
-          setShopProfile({ ...shopProfile, upiId: id });
-        }
+        if (r?.profile) setShopProfile(r.profile);
       })
       .catch(() => { /* offline — leave as null */ });
   }, []);
@@ -91,6 +98,28 @@ export default function MechanicProfile() {
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message || "Try again — make sure backend is running.");
     } finally { setSavingUpi(false); }
+  };
+
+  const handleToggleVehicleType = async (vehicleType: string) => {
+    if (!shopProfile || savingVehicleType) return;
+    const current = shopProfile.vehicleTypes || [];
+    const next = current.includes(vehicleType)
+      ? current.filter(type => type !== vehicleType)
+      : [...current, vehicleType];
+    if (next.length === 0) {
+      Alert.alert("Vehicle required", "Keep at least one vehicle specialty selected.");
+      return;
+    }
+    setSavingVehicleType(vehicleType);
+    try {
+      await apiSaveMechProfile({ vehicleTypes: next });
+      setShopProfile({ ...shopProfile, vehicleTypes: next });
+      showToast("Vehicle specialties updated", "success");
+    } catch (e: any) {
+      Alert.alert("Couldn't save", e?.message || "Please try again.");
+    } finally {
+      setSavingVehicleType(null);
+    }
   };
 
   const handleLogout = () => Alert.alert("Sign Out", "Are you sure?", [
@@ -130,6 +159,31 @@ export default function MechanicProfile() {
             </View>
           ))}
         </View>
+
+        {shopProfile && (
+          <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+            <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: C.cardBorder }}>
+              <Text style={{ color: C.text1, fontFamily: FONTS.bold, fontSize: 15, marginBottom: 14 }}>Vehicle Specialties</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {VEHICLE_SPECIALTIES.map(vehicle => {
+                  const selected = (shopProfile.vehicleTypes || []).includes(vehicle.id);
+                  const saving = savingVehicleType === vehicle.id;
+                  return (
+                    <Pressable
+                      key={vehicle.id}
+                      onPress={() => handleToggleVehicleType(vehicle.id)}
+                      disabled={!!savingVehicleType}
+                      style={{ minWidth: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: selected ? vehicle.color + "18" : C.bg, borderWidth: 1.5, borderColor: selected ? vehicle.color : C.border, opacity: savingVehicleType && !saving ? 0.55 : 1 }}
+                    >
+                      {saving ? <ActivityIndicator size="small" color={vehicle.color} /> : <Icon name={vehicle.icon as any} size={15} color={selected ? vehicle.color : C.text3} />}
+                      <Text style={{ color: selected ? vehicle.color : C.text2, fontFamily: selected ? FONTS.bold : FONTS.medium, fontSize: 12 }}>{vehicle.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Services */}
         {shopProfile?.services && shopProfile.services.length > 0 && (

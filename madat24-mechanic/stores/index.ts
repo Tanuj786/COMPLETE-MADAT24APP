@@ -20,7 +20,14 @@ interface AuthStore {
   user: AuthUser | null;
   isLoggedIn: boolean;
   login: (email: string, password: string, role: AuthUser["role"]) => Promise<void>;
-  signup: (data: { name: string; email: string; phone: string; password: string }, role: AuthUser["role"]) => Promise<void>;
+  signup: (data: {
+    name: string; email: string; phone: string; password: string;
+    mechanicProfile?: {
+      shopName: string; description?: string; address?: string; city?: string;
+      state?: string; pincode?: string; whatsappNumber?: string; gstNumber?: string;
+      hourlyRate?: number; services: string[]; vehicleTypes: string[];
+    };
+  }, role: AuthUser["role"]) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (p: Partial<AuthUser>) => void;
 }
@@ -55,6 +62,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       phone:    data.phone.trim(),
       password: data.password,
       role:     role.toUpperCase() as "CUSTOMER" | "MECHANIC",
+      mechanicProfile: data.mechanicProfile,
     });
     const authUser: AuthUser = {
       id:    user.id,

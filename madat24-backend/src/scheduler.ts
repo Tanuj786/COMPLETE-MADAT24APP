@@ -26,7 +26,7 @@ async function tick() {
     const jobs = await prisma.job.findMany({
       where: { status: "pending" },
       select: {
-        id: true, latitude: true, longitude: true, serviceType: true,
+        id: true, latitude: true, longitude: true, serviceType: true, vehicleType: true,
         customerId: true, requestedAt: true,
       },
     });
@@ -67,7 +67,7 @@ async function tick() {
 
       // Re-fan-out to newcomers
       const alreadyAlerted = new Set(await getAlertedMechanicIds(job.id));
-      const eligible = await findEligibleMechanics(job.latitude, job.longitude, job.serviceType);
+      const eligible = await findEligibleMechanics(job.latitude, job.longitude, job.serviceType, job.vehicleType);
       for (const m of eligible) {
         if (alreadyAlerted.has(m.userId)) continue;
         await alertMechanic(job.id, m.userId, job.serviceType, m.distance);

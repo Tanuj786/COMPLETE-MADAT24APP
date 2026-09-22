@@ -426,8 +426,8 @@ export default function CustomerRequest() {
     const lng = coords?.lng ?? 77.2090;
 
     // Step 1 — Create job on backend.
-    // This instantly broadcasts a push notification to ALL online mechanics
-    // within 10km: "Apke paas request aayi hai, ek customer hai yeh yeh need hai"
+    // This instantly broadcasts to online mechanics within 10km whose
+    // service list and vehicle specialties match this request.
     let createdJobId: string | null = null;
     try {
       const result = await apiCreateJob({
@@ -468,7 +468,7 @@ export default function CustomerRequest() {
     // Step 3 — Fetch ONLY real registered mechanics within 10km.
     // If none are registered/online → show empty state. No fake data ever.
     try {
-      const { mechanics: nearby } = await apiGetNearbyMechanics(lat, lng);
+      const { mechanics: nearby } = await apiGetNearbyMechanics(lat, lng, vehicleType, serviceType);
       setMechanics(nearby);
     } catch {
       setMechanics([]); // backend offline → empty, no mock fallback

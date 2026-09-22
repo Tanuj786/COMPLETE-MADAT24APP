@@ -234,10 +234,15 @@ export interface NearbyMechanic {
 
 // Fetch only real registered mechanics who are online and within 10km.
 // Returns empty array if none — no mock/fallback data.
-export const apiGetNearbyMechanics = (lat: number, lng: number) =>
+export const apiGetNearbyMechanics = (lat: number, lng: number, vehicleType?: string, serviceType?: string) => {
+  const filters = vehicleType && serviceType
+    ? `&vehicleType=${encodeURIComponent(vehicleType)}&serviceType=${encodeURIComponent(serviceType)}`
+    : "";
+  return (
   callBackend<{ mechanics: NearbyMechanic[]; total: number }>(
-    `/jobs/nearby-mechanics?latitude=${lat}&longitude=${lng}`
-  );
+    `/jobs/nearby-mechanics?latitude=${lat}&longitude=${lng}${filters}`
+  ));
+};
 export const apiGetMyJobs = () => callBackend<{ jobs: any[] }>("/jobs");
 export const apiGetJob    = (id: string) => callBackend<{ job: any }>(`/jobs/${id}`);
 export const apiCancelJob = (id: string) => callBackend(`/jobs/${id}/cancel`, { method: "PATCH" });

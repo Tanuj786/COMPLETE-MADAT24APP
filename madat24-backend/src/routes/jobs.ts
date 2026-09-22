@@ -6,7 +6,7 @@ import { jobsLimiter, validate } from "../middleware";
 import { CreateJobSchema, UpdateLocationSchema } from "../schemas";
 import {
   RADIUS_KM, haversineKm,
-  findEligibleMechanics, alertMechanic, getAlertedMechanicIds,
+  findEligibleMechanics, alertMechanic, getAlertedMechanicIds, mechanicCanHandleJob,
 } from "../dispatch";
 
 const r = Router();
@@ -18,6 +18,8 @@ const splitCsv = (s: string | null | undefined) => (s || "").split(",").map(x =>
 r.get("/nearby-mechanics", requireAuth, async (req, res) => {
   const lat = Number(req.query.latitude);
   const lng = Number(req.query.longitude);
+  const vehicleType = typeof req.query.vehicleType === "string" ? req.query.vehicleType : null;
+  const serviceType = typeof req.query.serviceType === "string" ? req.query.serviceType : null;
   if (!isFinite(lat) || !isFinite(lng)) return res.status(400).json({ error: "latitude/longitude required" });
 
   const profiles = await prisma.mechanicProfile.findMany({
@@ -26,6 +28,7 @@ r.get("/nearby-mechanics", requireAuth, async (req, res) => {
   });
 
   const enriched = profiles
+    .filter(p => !vehicleType || !serviceType || mechanicCanHandleJob(p, serviceType, vehicleType))
     .map(p => {
       const dist = haversineKm(lat, lng, p.latitude!, p.longitude!);
       return {
@@ -77,7 +80,7 @@ r.post("/", requireAuth, requireRole("CUSTOMER"), jobsLimiter, validate(CreateJo
     },
   });
 
-  const eligible = await findEligibleMechanics(job.latitude, job.longitude, job.serviceType);
+  const eligible = await findEligibleMechanics(job.latitude, job.longitude, job.serviceType, job.vehicleType);
   let alerted = 0;
   for (const m of eligible) {
     if (await alertMechanic(job.id, m.userId, job.serviceType, m.distance)) alerted++;
@@ -161,7 +164,7 @@ r.patch("/:id/location", requireAuth, requireRole("CUSTOMER"), validate(UpdateLo
 
   let newlyAlerted = 0;
   if (updated.status === "pending") {
-    const eligible = await findEligibleMechanics(lat, lng, updated.serviceType);
+    const eligible = await findEligibleMechanics(lat, lng, updated.serviceType, updated.vehicleType);
     for (const m of eligible) {
       if (await alertMechanic(updated.id, m.userId, updated.serviceType, m.distance)) newlyAlerted++;
     }

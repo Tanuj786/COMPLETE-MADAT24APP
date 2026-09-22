@@ -170,7 +170,25 @@ export default function MechanicSignup() {
   const handleFinalSubmit = async () => {
     setLoading(true);
     try {
-      await signup({ name, email, phone, password }, "mechanic");
+      await signup({
+        name,
+        email,
+        phone,
+        password,
+        mechanicProfile: {
+          shopName: shopName || name + "'s Auto Repair",
+          description: shopDesc,
+          address,
+          city,
+          state: stateVal,
+          pincode,
+          whatsappNumber: whatsapp || phone,
+          gstNumber,
+          hourlyRate: parseFloat(hourlyRate) || 500,
+          services: selectedServices,
+          vehicleTypes: vehicleExpertise,
+        },
+      }, "mechanic");
       // Create a real shop profile from what the mechanic entered (no mock data)
       setShopProfile({
         id: `shop-${Date.now()}`,
@@ -185,6 +203,7 @@ export default function MechanicSignup() {
           coordinates: { lat: 12.9716, lng: 77.5946 },
         },
         services: selectedServices.length > 0 ? selectedServices as any : [],
+        vehicleTypes: vehicleExpertise,
         gstNumber: gstNumber || undefined,
         whatsappNumber: whatsapp || phone,
         hourlyRate: parseFloat(hourlyRate) || 500,
@@ -220,6 +239,7 @@ export default function MechanicSignup() {
       if (selectedServices.length === 0) { Alert.alert("Required", "Select at least one service you offer"); return; }
       goNext();
     } else if (step === 5) {
+      if (vehicleExpertise.length === 0) { Alert.alert("Required", "Select at least one vehicle type you service"); return; }
       handleFinalSubmit();
     }
   };
